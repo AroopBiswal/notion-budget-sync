@@ -1,10 +1,10 @@
-# AMEX → Notion Budget Sync
+# CC → Notion Budget Sync
 
-Pulls AMEX transactions from Plaid, categorizes them with simple rules (with a Miscellaneous fallback), and writes them to your monthly Notion budget page. Runs daily on GitHub Actions.
+Pulls CC transactions from Plaid, categorizes them with simple rules (with a Miscellaneous fallback), and writes them to your monthly Notion budget page. Runs daily on GitHub Actions.
 
 ## How it works
 
-1. Plaid pulls the last 7 days of settled AMEX transactions
+1. Plaid pulls the last 7 days of settled CC transactions
 2. Each transaction is categorized via a substring-match rule list (`src/config.py` → `MERCHANT_RULES`). Anything that doesn't match goes to **Miscellaneous**.
 3. The script finds the Notion page titled with the current month name (e.g., "April"), locates the two child databases inside it (transactions table and Categories), and adds new rows.
 4. Dedupe is handled via a hidden `PlaidId` text property on each transaction row.
@@ -21,7 +21,7 @@ Pulls AMEX transactions from Plaid, categorizes them with simple rules (with a M
    pip install -r requirements.txt
    python -m scripts.link_account
    ```
-5. Open http://localhost:8000, click "Link AMEX", complete the OAuth flow with American Express
+5. Open http://localhost:8000, click "Link CC", complete the OAuth flow with American Express
 6. Copy the printed `access_token` into `.env` as `PLAID_ACCESS_TOKEN`
 
 ### 2. Notion
@@ -66,4 +66,4 @@ After a few weeks of running this, look at what's in your Miscellaneous bucket -
 
 - **"No Notion page titled 'May' found"**: Create the page (or fix its title) and grant your integration access.
 - **"Expected 2 child databases on month page, found 1"**: One of the databases on the page isn't a child database. Make sure both Transactions and Categories are inline databases on the page.
-- **Plaid auth errors**: Access tokens occasionally need re-auth (e.g., if you change your AMEX password). Re-run `link_account.py` to get a fresh one.
+- **Plaid auth errors**: Access tokens occasionally need re-auth (e.g., if you change your CC password). Re-run `link_account.py` to get a fresh one.
