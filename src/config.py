@@ -1,27 +1,23 @@
-"""Configuration: env vars and merchant categorization rules."""
+"""Environment variables and merchant categorization rules."""
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Teller
-TELLER_ACCESS_TOKEN = os.getenv("TELLER_ACCESS_TOKEN")
-TELLER_CERT = os.getenv("TELLER_CERT")         # path to certificate PEM file
-TELLER_KEY = os.getenv("TELLER_KEY")           # path to private key PEM file
-TELLER_ACCOUNT_ID = os.getenv("TELLER_ACCOUNT_ID")
+# LLM
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+LLM_CATEGORIZATION = os.getenv("LLM_CATEGORIZATION", "false").lower() == "true"
 
 # Notion
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 
-# Behavior
-LOOKBACK_DAYS = int(os.getenv("LOOKBACK_DAYS", "7"))
-
-# Notion category names (must match the page titles in your Categories database)
+# Category list (must match Select options in your Notion database)
 CATEGORIES = ["Food", "Travel", "Fun", "Fixed", "Transportation", "Health", "Miscellaneous"]
 FALLBACK_CATEGORY = "Miscellaneous"
 
-# Merchant -> Category rules (substring match, case-insensitive)
-# Add/edit these as you see new merchants in your Misc bucket
+# Merchant -> Category rules (substring match, case-insensitive, first match wins)
 MERCHANT_RULES = {
     # Food / groceries / restaurants
     "trader joe": "Food",
@@ -29,18 +25,18 @@ MERCHANT_RULES = {
     "safeway": "Food",
     "instacart": "Food",
     "doordash": "Food",
-    "ubereats": "Food",
     "uber eats": "Food",
+    "ubereats": "Food",
     "grubhub": "Food",
     "chipotle": "Food",
     "sweetgreen": "Food",
     "starbucks": "Food",
     "blue bottle": "Food",
     "philz": "Food",
-    "tst*": "Food",  # Toast POS prefix, usually restaurants
+    "tst*": "Food",
 
-    # Transportation
-    "uber": "Transportation",  # note: "uber eats" matched above first
+    # Transportation (uber eats matched above, so plain uber catches rides)
+    "uber": "Transportation",
     "lyft": "Transportation",
     "caltrain": "Transportation",
     "clipper": "Transportation",
@@ -50,7 +46,7 @@ MERCHANT_RULES = {
     "76 ": "Transportation",
     "parking": "Transportation",
 
-    # Fixed (rent, utilities, subscriptions you consider fixed)
+    # Fixed (subscriptions, utilities, rent)
     "pg&e": "Fixed",
     "pge": "Fixed",
     "comcast": "Fixed",

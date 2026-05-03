@@ -1,191 +1,101 @@
-"""Notion client: find the current month page, resolve its databases, and write transactions.
-
-Page layout assumed:
-  - A page titled with the current month name (e.g., "April")
-  - That page contains TWO inline child databases:
-      1. Transactions table with columns: Date, Name, Category (relation), Amount
-      2. A "Categories" database whose pages are titled "Food", "Travel", etc.
-  - The Category property on the transactions DB is a RELATION to the Categories DB.
-
-Dedupe strategy:
-  We add a hidden text property "TellerId" to the transactions DB on first run if missing.
-  Subsequent runs skip transactions whose TellerId is already present.
-"""
-from datetime import date
-from typing import Dict, List, Optional
+"""Write normalized transactions to a user-provided Notion database."""
+import logging
+import time
+from typing import Dict, List
 
 from notion_client import Client
 
 from .config import NOTION_TOKEN
 
-_TX_ID_PROP = "TellerId"
+log = logging.getLogger(__name__)
+
+REQUIRED_PROPS = {
+    "Name": "title",
+    "Date": "date",
+    "Amount": "number",
+    "Category": "select",
+    "TxnId": "rich_text",
+}
 
 
-def _client() -> Client:
+def get_client() -> Client:
     return Client(auth=NOTION_TOKEN)
 
 
-def _current_month_name() -> str:
-    return date.today().strftime("%B")  # "April", "May", etc.
+def extract_database_id(url_or_id: str) -> str:
+    """Accept a full Notion URL or raw ID and return the 32-char hex database ID."""
+    clean = url_or_id.split("?")[0].rstrip("/")
+    segment = clean.split("/")[-1]
+    # IDs appear after the last hyphen in the slug, or are the whole segment
+    raw = segment.split("-")[-1].replace("-", "")
+    if len(raw) == 32:
+        return raw
+    raw2 = segment.replace("-", "")
+    return raw2[:32] if len(raw2) >= 32 else url_or_id.replace("-", "")
 
 
-def find_month_page(notion: Client, month_name: Optional[str] = None) -> Optional[str]:
-    """Find a page whose title matches the current month name. Returns page ID or None."""
-    target = month_name or _current_month_name()
-    results = notion.search(query=target, filter={"property": "object", "value": "page"})
-    for page in results.get("results", []):
-        # Check the page title
-        title_prop = None
-        props = page.get("properties", {})
-        for prop in props.values():
-            if prop.get("type") == "title":
-                title_prop = prop
-                break
-        if not title_prop:
-            continue
-        title_text = "".join(t.get("plain_text", "") for t in title_prop.get("title", []))
-        if title_text.strip().lower() == target.lower():
-            return page["id"]
-    return None
+def validate_schema(notion: Client, database_id: str) -> None:
+    """Raise RuntimeError with an actionable message if the DB schema is wrong."""
+    db = notion.databases.retrieve(database_id=database_id)
+    props = db.get("properties", {})
 
+    errors = []
+    for name, expected_type in REQUIRED_PROPS.items():
+        if name not in props:
+            errors.append(f"Missing property '{name}' (expected type: {expected_type})")
+        elif props[name].get("type") != expected_type:
+            actual = props[name].get("type")
+            errors.append(f"Property '{name}' is type '{actual}', expected '{expected_type}'")
 
-def find_child_databases(notion: Client, page_id: str) -> List[Dict]:
-    """Return all child_database blocks under a page, in order."""
-    databases = []
-    cursor = None
-    while True:
-        kwargs = {"block_id": page_id, "page_size": 100}
-        if cursor:
-            kwargs["start_cursor"] = cursor
-        resp = notion.blocks.children.list(**kwargs)
-        for block in resp.get("results", []):
-            if block.get("type") == "child_database":
-                databases.append(block)
-        if not resp.get("has_more"):
-            break
-        cursor = resp.get("next_cursor")
-    return databases
-
-
-def resolve_databases(notion: Client, page_id: str) -> Dict[str, str]:
-    """Identify which child database is transactions vs categories.
-
-    We distinguish by inspecting the database schema:
-      - Transactions DB has an "Amount" number property
-      - Categories DB does not (or is the other one)
-    """
-    child_dbs = find_child_databases(notion, page_id)
-    if len(child_dbs) < 2:
+    if errors:
         raise RuntimeError(
-            f"Expected 2 child databases on month page, found {len(child_dbs)}"
+            "Notion database schema validation failed:\n"
+            + "\n".join(f"  - {e}" for e in errors)
+            + "\n\nFix: run 'python -m scripts.init_notion <page_id>' or duplicate the template."
         )
 
-    transactions_db_id = None
-    categories_db_id = None
 
-    for db_block in child_dbs:
-        db_id = db_block["id"]
-        db = notion.databases.retrieve(database_id=db_id)
-        props = db.get("properties", {})
-        has_amount = any(p.get("type") == "number" and name.lower() == "amount"
-                         for name, p in props.items())
-        if has_amount:
-            transactions_db_id = db_id
-        else:
-            categories_db_id = db_id
-
-    if not transactions_db_id or not categories_db_id:
-        raise RuntimeError("Could not identify transactions and categories databases")
-
-    return {"transactions": transactions_db_id, "categories": categories_db_id}
-
-
-def load_category_page_ids(notion: Client, categories_db_id: str) -> Dict[str, str]:
-    """Return {category_name: page_id} for all pages in the Categories database."""
-    mapping = {}
+def existing_txn_ids(notion: Client, database_id: str) -> set:
+    """Return all TxnId values already present in the database."""
+    ids: set = set()
     cursor = None
     while True:
-        kwargs = {"database_id": categories_db_id, "page_size": 100}
+        kwargs: Dict = {"database_id": database_id, "page_size": 100}
         if cursor:
             kwargs["start_cursor"] = cursor
         resp = notion.databases.query(**kwargs)
         for page in resp.get("results", []):
-            title = ""
-            for prop in page.get("properties", {}).values():
-                if prop.get("type") == "title":
-                    title = "".join(t.get("plain_text", "") for t in prop.get("title", []))
-                    break
-            if title:
-                mapping[title.strip()] = page["id"]
-        if not resp.get("has_more"):
-            break
-        cursor = resp.get("next_cursor")
-    return mapping
-
-
-def ensure_tx_id_property(notion: Client, transactions_db_id: str) -> None:
-    """Add a hidden 'TellerId' rich_text property to the transactions DB if missing."""
-    db = notion.databases.retrieve(database_id=transactions_db_id)
-    if _TX_ID_PROP in db.get("properties", {}):
-        return
-    notion.databases.update(
-        database_id=transactions_db_id,
-        properties={_TX_ID_PROP: {"rich_text": {}}},
-    )
-
-
-def existing_tx_ids(notion: Client, transactions_db_id: str) -> set:
-    """Return the set of TellerId values already present in the transactions DB."""
-    ids = set()
-    cursor = None
-    while True:
-        kwargs = {"database_id": transactions_db_id, "page_size": 100}
-        if cursor:
-            kwargs["start_cursor"] = cursor
-        resp = notion.databases.query(**kwargs)
-        for page in resp.get("results", []):
-            prop = page.get("properties", {}).get(_TX_ID_PROP)
-            if not prop:
-                continue
-            text = "".join(t.get("plain_text", "") for t in prop.get("rich_text", []))
-            if text:
-                ids.add(text)
+            prop = page.get("properties", {}).get("TxnId")
+            if prop:
+                text = "".join(t.get("plain_text", "") for t in prop.get("rich_text", []))
+                if text:
+                    ids.add(text)
         if not resp.get("has_more"):
             break
         cursor = resp.get("next_cursor")
     return ids
 
 
-def _find_property_name(db: Dict, type_name: str, fallback_name: str) -> str:
-    """Find the first property of given type, fall back to fallback_name."""
-    for name, prop in db.get("properties", {}).items():
-        if prop.get("type") == type_name:
-            return name
-    return fallback_name
-
-
-def add_transaction(
+def add_transactions(
     notion: Client,
-    transactions_db_id: str,
-    txn: Dict,
-    category_page_id: str,
-) -> None:
-    """Create one row in the transactions database."""
-    db = notion.databases.retrieve(database_id=transactions_db_id)
-    props_schema = db.get("properties", {})
-
-    # Resolve actual property names (in case capitalization differs)
-    name_prop = _find_property_name(db, "title", "Name")
-    date_prop = next((n for n, p in props_schema.items() if p.get("type") == "date"), "Date")
-    amount_prop = next((n for n, p in props_schema.items() if p.get("type") == "number"), "Amount")
-    category_prop = next((n for n, p in props_schema.items() if p.get("type") == "relation"), "Category")
-
-    properties = {
-        name_prop: {"title": [{"text": {"content": txn["name"]}}]},
-        date_prop: {"date": {"start": txn["date"]}},
-        amount_prop: {"number": txn["amount"]},
-        category_prop: {"relation": [{"id": category_page_id}]},
-        _TX_ID_PROP: {"rich_text": [{"text": {"content": txn["id"]}}]},
-    }
-
-    notion.pages.create(parent={"database_id": transactions_db_id}, properties=properties)
+    database_id: str,
+    txns: List[Dict],
+    categories: List[str],
+    rate_limit: float = 0.34,
+) -> int:
+    """Insert transactions as new Notion pages. Returns count written."""
+    written = 0
+    for txn, category in zip(txns, categories):
+        notion.pages.create(
+            parent={"database_id": database_id},
+            properties={
+                "Name": {"title": [{"text": {"content": txn["merchant"]}}]},
+                "Date": {"date": {"start": txn["date"]}},
+                "Amount": {"number": txn["amount"]},
+                "Category": {"select": {"name": category}},
+                "TxnId": {"rich_text": [{"text": {"content": txn["id"]}}]},
+            },
+        )
+        written += 1
+        time.sleep(rate_limit)  # stay under Notion's ~3 req/s limit
+    return written

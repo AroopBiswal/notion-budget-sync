@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>notion-budget-sync</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <span class="logo">notion-budget-sync</span>
+    </header>
+
+    <main class="card">
+      <!-- Notion URL -->
+      <div class="field">
+        <label for="notion-url">Notion Database URL</label>
+        <input
+          id="notion-url"
+          type="text"
+          placeholder="https://notion.so/yourworkspace/Budget-xxxxx"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <!-- Format profile selector -->
+      <div class="field">
+        <label>Format Profile</label>
+        <div class="format-row">
+          <select id="format-select">
+            <option value="">Auto-detect</option>
+          </select>
+          <button class="icon-btn" id="manage-btn" title="Manage profiles">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Drop zone -->
+      <div class="field">
+        <label>Transaction File</label>
+        <div class="drop-zone" id="drop-zone">
+          <svg class="drop-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p class="drop-primary">Drop your file here or <span class="browse-link">browse</span></p>
+          <p class="drop-hint">CSV, XLSX, TSV, XLS, JSON</p>
+          <input type="file" id="file-input" accept=".csv,.tsv,.xlsx,.xls,.json" hidden />
+        </div>
+        <div class="file-selected" id="file-selected" hidden>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span id="file-name"></span>
+          <button class="clear-btn" id="clear-file">remove</button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button class="btn btn-secondary" id="dry-run-btn" disabled>Dry Run</button>
+        <button class="btn btn-primary" id="sync-btn" disabled>
+          Sync
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+            <polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Loading state -->
+      <div class="loading" id="loading" hidden>
+        <div class="spinner"></div>
+        <span id="loading-text">Processing...</span>
+      </div>
+
+      <!-- Results -->
+      <div class="results" id="results" hidden>
+        <div class="stats" id="stats"></div>
+        <div class="preview-wrap" id="preview-wrap" hidden>
+          <table class="preview-table" id="preview-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Merchant</th>
+                <th>Amount</th>
+                <th>Category</th>
+              </tr>
+            </thead>
+            <tbody id="preview-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Save profile prompt -->
+      <div class="save-prompt" id="save-prompt" hidden>
+        <p class="save-label">New format detected. Save it for future runs?</p>
+        <div class="save-row">
+          <input id="save-name" type="text" placeholder="e.g. Chase Sapphire CSV" />
+          <button class="btn btn-secondary btn-sm" id="save-btn">Save Profile</button>
+        </div>
+        <p class="save-hint" id="save-hint"></p>
+      </div>
+
+      <!-- Error -->
+      <div class="error-box" id="error-box" hidden></div>
+    </main>
+  </div>
+
+  <!-- Profile manager modal -->
+  <div class="modal-overlay" id="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Format Profiles</h2>
+        <button class="icon-btn" id="modal-close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <p class="empty-state">No profiles saved yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

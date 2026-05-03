@@ -1,7 +1,13 @@
 .env
+.schema_cache/
 __pycache__/
 *.pyc
+*.pyo
+.DS_Store
+*.egg-info/
+dist/
+build/
 .venv/
 venv/
-.DS_Store
 transactions/
+*.tmp
