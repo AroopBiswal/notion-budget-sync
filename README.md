@@ -48,6 +48,7 @@ python -m src.main path/to/transactions.csv
 - Or run `python -m scripts.init_notion <parent_page_id>` to create one automatically
 
 **3.** Share the database with your integration: open it in Notion, click **...** -> **Connections** -> select your integration.
+*** You can 
 
 **4.** Paste the database URL into the app (it extracts the ID automatically).
 

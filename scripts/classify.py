@@ -130,7 +130,7 @@ def classify_batch(
         for name in category_names
     )
     txns_text = "\nTransactions:\n" + "".join(
-        f"{i + 1}. {exp['name']} | ${exp['amount']:.2f}\n"
+        f"{i + 1}. {exp['name']} ${exp['amount']:.2f}\n"
         for i, exp in enumerate(expenses)
     )
 
@@ -158,14 +158,10 @@ def classify_batch(
 
     resp = client.messages.create(
         model=MODEL,
-        max_tokens=1024,
+        max_tokens=600,
         tools=[tool],
         tool_choice={"type": "tool", "name": "classify_expenses"},
-        system=(
-            "You are an expense classifier. "
-            "Classify each purchase into exactly one of the provided categories. "
-            "Use Miscellaneous for anything ambiguous or that doesn't fit."
-        ),
+        system="Classify each expense into one category. Use Miscellaneous if unsure.",
         messages=[{"role": "user", "content": cats_text + txns_text}],
     )
 

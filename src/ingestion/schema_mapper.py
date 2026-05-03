@@ -45,26 +45,15 @@ def infer_mapping(headers: List[str], rows: List[Dict]) -> Dict:
     from ..llm.factory import get_provider
     provider = get_provider()
 
-    sample = json.dumps(rows[:5], indent=2, default=str)
-    system = (
-        "You are a financial data expert. "
-        "Analyze CSV headers and sample rows to identify column roles."
-    )
+    sample = json.dumps(rows[:2], default=str)
+    system = "Identify column roles in bank transaction data."
     user = (
-        f"Headers: {headers}\n\n"
-        f"Sample rows (up to 5):\n{sample}\n\n"
-        "Return JSON with exactly this structure:\n"
-        "{\n"
-        '  "date_col": "column name containing the transaction date",\n'
-        '  "merchant_col": "column name containing the merchant or description",\n'
-        '  "amount_col": "column name containing the dollar amount",\n'
-        '  "category_col": null,\n'
-        '  "txn_id_col": null,\n'
-        '  "amount_sign": "positive_is_charge" or "negative_is_charge"\n'
-        "}\n\n"
-        'Set amount_sign to "negative_is_charge" if purchases appear as negative numbers '
-        "(e.g., -45.00). Set category_col and txn_id_col to the column name if one exists, "
-        "otherwise null."
+        f"Headers: {headers}\n"
+        f"Rows: {sample}\n\n"
+        'Return: {"date_col":..., "merchant_col":..., "amount_col":..., '
+        '"category_col":null, "txn_id_col":null, '
+        '"amount_sign":"positive_is_charge"|"negative_is_charge"}\n'
+        "amount_sign is negative_is_charge if purchases are negative numbers."
     )
     return provider.complete_json(system, user)
 

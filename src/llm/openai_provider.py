@@ -13,10 +13,14 @@ class OpenAIProvider(LLMProvider):
     def complete_json(self, system: str, user: str) -> dict:
         resp = self._client.chat.completions.create(
             model=MODEL,
+            max_tokens=512,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
         )
-        return json.loads(resp.choices[0].message.content)
+        text = resp.choices[0].message.content or ""
+        if not text.strip():
+            raise RuntimeError("LLM returned empty response")
+        return json.loads(text)

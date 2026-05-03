@@ -50,11 +50,11 @@ def _llm_fill(txns: List[Dict], categories: List, indices: List[int], valid_cate
         merchants = [txns[i]["merchant"] for i in batch]
         n = len(merchants)
 
-        system = "You are a budget categorization assistant. Reply with JSON only."
+        system = "Categorize merchants. JSON only."
         user = (
-            f"Categorize each merchant into exactly one of: {valid_categories}\n\n"
+            f"Categories: {valid_categories}\n"
             + "\n".join(f"{j + 1}. {m}" for j, m in enumerate(merchants))
-            + f'\n\nReturn: {{"categories": ["cat1", ...]}} with exactly {n} items.'
+            + f'\nReturn: {{"categories":[...]}} with {n} items.'
         )
 
         try:
