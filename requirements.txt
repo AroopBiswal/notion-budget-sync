@@ -1,4 +1,4 @@
-plaid-python==24.0.0
+requests>=2.31.0
 notion-client==2.2.1
 python-dotenv==1.0.1
 flask==3.0.3

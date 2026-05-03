@@ -4,11 +4,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Plaid
-PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID")
-PLAID_SECRET = os.getenv("PLAID_SECRET")
-PLAID_ENV = os.getenv("PLAID_ENV", "development")
-PLAID_ACCESS_TOKEN = os.getenv("PLAID_ACCESS_TOKEN")
+# Teller
+TELLER_ACCESS_TOKEN = os.getenv("TELLER_ACCESS_TOKEN")
+TELLER_CERT = os.getenv("TELLER_CERT")         # path to certificate PEM file
+TELLER_KEY = os.getenv("TELLER_KEY")           # path to private key PEM file
+TELLER_ACCOUNT_ID = os.getenv("TELLER_ACCOUNT_ID")
 
 # Notion
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")

@@ -4,15 +4,15 @@ import sys
 from datetime import datetime
 
 from .config import LOOKBACK_DAYS, FALLBACK_CATEGORY
-from .plaid_client import fetch_transactions
+from .teller_client import fetch_transactions
 from .categorizer import categorize
 from .notion_client import (
     _client as notion_client,
     find_month_page,
     resolve_databases,
     load_category_page_ids,
-    ensure_plaid_id_property,
-    existing_plaid_ids,
+    ensure_tx_id_property,
+    existing_tx_ids,
     add_transaction,
 )
 
@@ -24,10 +24,10 @@ log = logging.getLogger(__name__)
 
 
 def main() -> int:
-    log.info("Starting AMEX -> Notion sync")
+    log.info("Starting Teller -> Notion sync")
 
-    # 1. Fetch from Plaid
-    log.info(f"Fetching transactions from Plaid (last {LOOKBACK_DAYS} days)")
+    # 1. Fetch from Teller
+    log.info(f"Fetching transactions from Teller (last {LOOKBACK_DAYS} days)")
     txns = fetch_transactions(LOOKBACK_DAYS)
     log.info(f"Fetched {len(txns)} settled transactions")
     if not txns:
@@ -48,11 +48,11 @@ def main() -> int:
     transactions_db_id = dbs["transactions"]
     categories_db_id = dbs["categories"]
 
-    # 4. Make sure PlaidId property exists for dedupe
-    ensure_plaid_id_property(notion, transactions_db_id)
+    # 4. Make sure TellerId property exists for dedupe
+    ensure_tx_id_property(notion, transactions_db_id)
 
     # 5. Load existing IDs and category page mapping
-    seen_ids = existing_plaid_ids(notion, transactions_db_id)
+    seen_ids = existing_tx_ids(notion, transactions_db_id)
     category_pages = load_category_page_ids(notion, categories_db_id)
     log.info(f"Categories available: {sorted(category_pages.keys())}")
     if FALLBACK_CATEGORY not in category_pages:

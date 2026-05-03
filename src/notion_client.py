@@ -8,8 +8,8 @@ Page layout assumed:
   - The Category property on the transactions DB is a RELATION to the Categories DB.
 
 Dedupe strategy:
-  We add a hidden text property "PlaidId" to the transactions DB on first run if missing.
-  Subsequent runs skip transactions whose PlaidId is already present.
+  We add a hidden text property "TellerId" to the transactions DB on first run if missing.
+  Subsequent runs skip transactions whose TellerId is already present.
 """
 from datetime import date
 from typing import Dict, List, Optional
@@ -18,7 +18,7 @@ from notion_client import Client
 
 from .config import NOTION_TOKEN
 
-_PLAID_ID_PROP = "PlaidId"
+_TX_ID_PROP = "TellerId"
 
 
 def _client() -> Client:
@@ -123,19 +123,19 @@ def load_category_page_ids(notion: Client, categories_db_id: str) -> Dict[str, s
     return mapping
 
 
-def ensure_plaid_id_property(notion: Client, transactions_db_id: str) -> None:
-    """Add a hidden 'PlaidId' rich_text property to the transactions DB if missing."""
+def ensure_tx_id_property(notion: Client, transactions_db_id: str) -> None:
+    """Add a hidden 'TellerId' rich_text property to the transactions DB if missing."""
     db = notion.databases.retrieve(database_id=transactions_db_id)
-    if _PLAID_ID_PROP in db.get("properties", {}):
+    if _TX_ID_PROP in db.get("properties", {}):
         return
     notion.databases.update(
         database_id=transactions_db_id,
-        properties={_PLAID_ID_PROP: {"rich_text": {}}},
+        properties={_TX_ID_PROP: {"rich_text": {}}},
     )
 
 
-def existing_plaid_ids(notion: Client, transactions_db_id: str) -> set:
-    """Return the set of PlaidId values already present in the transactions DB."""
+def existing_tx_ids(notion: Client, transactions_db_id: str) -> set:
+    """Return the set of TellerId values already present in the transactions DB."""
     ids = set()
     cursor = None
     while True:
@@ -144,7 +144,7 @@ def existing_plaid_ids(notion: Client, transactions_db_id: str) -> set:
             kwargs["start_cursor"] = cursor
         resp = notion.databases.query(**kwargs)
         for page in resp.get("results", []):
-            prop = page.get("properties", {}).get(_PLAID_ID_PROP)
+            prop = page.get("properties", {}).get(_TX_ID_PROP)
             if not prop:
                 continue
             text = "".join(t.get("plain_text", "") for t in prop.get("rich_text", []))
@@ -185,7 +185,7 @@ def add_transaction(
         date_prop: {"date": {"start": txn["date"]}},
         amount_prop: {"number": txn["amount"]},
         category_prop: {"relation": [{"id": category_page_id}]},
-        _PLAID_ID_PROP: {"rich_text": [{"text": {"content": txn["id"]}}]},
+        _TX_ID_PROP: {"rich_text": [{"text": {"content": txn["id"]}}]},
     }
 
     notion.pages.create(parent={"database_id": transactions_db_id}, properties=properties)
