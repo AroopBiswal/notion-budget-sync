@@ -16,8 +16,13 @@ def categorize(merchant: str) -> str:
     return FALLBACK_CATEGORY
 
 
-def categorize_batch(txns: List[Dict]) -> List[str]:
-    """Return a category string for each transaction in txns (parallel list)."""
+def categorize_batch(txns: List[Dict], valid_categories: Optional[List[str]] = None) -> List[str]:
+    """Return a category string for each transaction in txns (parallel list).
+
+    valid_categories: the list fetched live from Notion. Falls back to config.CATEGORIES
+    if not provided. Used to constrain the LLM fallback to categories that actually exist.
+    """
+    effective_cats = valid_categories if valid_categories is not None else CATEGORIES
     categories: List[Optional[str]] = []
     unmatched: List[int] = []
 
@@ -30,12 +35,12 @@ def categorize_batch(txns: List[Dict]) -> List[str]:
             categories.append(cat)
 
     if unmatched:
-        _llm_fill(txns, categories, unmatched)
+        _llm_fill(txns, categories, unmatched, effective_cats)
 
     return [c or FALLBACK_CATEGORY for c in categories]
 
 
-def _llm_fill(txns: List[Dict], categories: List, indices: List[int]) -> None:
+def _llm_fill(txns: List[Dict], categories: List, indices: List[int], valid_categories: List[str]) -> None:
     from .llm.factory import get_provider
     provider = get_provider()
     batch_size = 20
@@ -47,7 +52,7 @@ def _llm_fill(txns: List[Dict], categories: List, indices: List[int]) -> None:
 
         system = "You are a budget categorization assistant. Reply with JSON only."
         user = (
-            f"Categorize each merchant into exactly one of: {CATEGORIES}\n\n"
+            f"Categorize each merchant into exactly one of: {valid_categories}\n\n"
             + "\n".join(f"{j + 1}. {m}" for j, m in enumerate(merchants))
             + f'\n\nReturn: {{"categories": ["cat1", ...]}} with exactly {n} items.'
         )
@@ -57,6 +62,6 @@ def _llm_fill(txns: List[Dict], categories: List, indices: List[int]) -> None:
             llm_cats = result.get("categories", [])
             for j, idx in enumerate(batch):
                 raw = llm_cats[j] if j < len(llm_cats) else FALLBACK_CATEGORY
-                categories[idx] = raw if raw in CATEGORIES else FALLBACK_CATEGORY
+                categories[idx] = raw if raw in valid_categories else FALLBACK_CATEGORY
         except Exception as exc:
             log.warning("LLM categorization failed for batch: %s", exc)

@@ -1,7 +1,8 @@
 """Write normalized transactions to a user-provided Notion database."""
 import logging
+import re
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from notion_client import Client
 
@@ -13,7 +14,7 @@ REQUIRED_PROPS = {
     "Name": "title",
     "Date": "date",
     "Amount": "number",
-    "Category": "select",
+    "Category": "relation",
     "TxnId": "rich_text",
 }
 
@@ -26,7 +27,6 @@ def extract_database_id(url_or_id: str) -> str:
     """Accept a full Notion URL or raw ID and return the 32-char hex database ID."""
     clean = url_or_id.split("?")[0].rstrip("/")
     segment = clean.split("/")[-1]
-    # IDs appear after the last hyphen in the slug, or are the whole segment
     raw = segment.split("-")[-1].replace("-", "")
     if len(raw) == 32:
         return raw
@@ -55,6 +55,59 @@ def validate_schema(notion: Client, database_id: str) -> None:
         )
 
 
+def get_categories_db_id(notion: Client, database_id: str) -> str:
+    """Discover the Categories database ID from the Category relation property."""
+    db = notion.databases.retrieve(database_id=database_id)
+    prop = db.get("properties", {}).get("Category", {})
+    if prop.get("type") != "relation":
+        raise RuntimeError(
+            "The 'Category' property is not a relation. "
+            "Duplicate the Notion template or run init_notion.py to set up the correct schema."
+        )
+    return prop["relation"]["database_id"]
+
+
+def fetch_categories(notion: Client, categories_db_id: str) -> Dict[str, str]:
+    """Return {category_name: page_id} for all pages in the Categories database."""
+    mapping: Dict[str, str] = {}
+    cursor = None
+    while True:
+        kwargs: Dict = {"database_id": categories_db_id, "page_size": 100}
+        if cursor:
+            kwargs["start_cursor"] = cursor
+        resp = notion.databases.query(**kwargs)
+        for page in resp.get("results", []):
+            for prop in page.get("properties", {}).values():
+                if prop.get("type") == "title":
+                    name = "".join(t["plain_text"] for t in prop.get("title", []))
+                    if name:
+                        mapping[name.strip()] = page["id"]
+        if not resp.get("has_more"):
+            break
+        cursor = resp.get("next_cursor")
+    return mapping
+
+
+def _strip_prefix(name: str) -> str:
+    """Strip leading emoji and whitespace from a category name for fuzzy matching."""
+    return re.sub(r"^[\U0001F000-\U0001FFFF☀-➿\s]+", "", name).strip().lower()
+
+
+def resolve_category(name: str, category_map: Dict[str, str]) -> Optional[str]:
+    """Return the Notion page ID for a category, matching by emoji-stripped name if needed."""
+    if name in category_map:
+        return category_map[name]
+    norm = _strip_prefix(name)
+    for cat_name, page_id in category_map.items():
+        if _strip_prefix(cat_name) == norm:
+            return page_id
+    # Fall back to Miscellaneous
+    for cat_name, page_id in category_map.items():
+        if "miscellaneous" in _strip_prefix(cat_name):
+            return page_id
+    return None
+
+
 def existing_txn_ids(notion: Client, database_id: str) -> set:
     """Return all TxnId values already present in the database."""
     ids: set = set()
@@ -80,19 +133,19 @@ def add_transactions(
     notion: Client,
     database_id: str,
     txns: List[Dict],
-    categories: List[str],
+    category_page_ids: List[str],
     rate_limit: float = 0.34,
 ) -> int:
     """Insert transactions as new Notion pages. Returns count written."""
     written = 0
-    for txn, category in zip(txns, categories):
+    for txn, cat_page_id in zip(txns, category_page_ids):
         notion.pages.create(
             parent={"database_id": database_id},
             properties={
                 "Name": {"title": [{"text": {"content": txn["merchant"]}}]},
                 "Date": {"date": {"start": txn["date"]}},
                 "Amount": {"number": txn["amount"]},
-                "Category": {"select": {"name": category}},
+                "Category": {"relation": [{"id": cat_page_id}]},
                 "TxnId": {"rich_text": [{"text": {"content": txn["id"]}}]},
             },
         )

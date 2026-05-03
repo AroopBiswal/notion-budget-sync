@@ -13,9 +13,21 @@ LLM_CATEGORIZATION = os.getenv("LLM_CATEGORIZATION", "false").lower() == "true"
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 
-# Category list (must match Select options in your Notion database)
+# Clean category names used by MERCHANT_RULES and the categorizer.
+# These are matched against Notion category names with emoji stripped.
 CATEGORIES = ["Food", "Travel", "Fun", "Fixed", "Transportation", "Health", "Miscellaneous"]
 FALLBACK_CATEGORY = "Miscellaneous"
+
+# One-line descriptions injected into the LLM classification prompt.
+CATEGORY_DESCRIPTIONS = {
+    "Food": "groceries, restaurants, coffee shops, food delivery",
+    "Transportation": "Uber, Lyft, gas, parking, public transit",
+    "Travel": "flights, hotels, Airbnb, vacation expenses",
+    "Fixed": "rent, utilities, phone bills, recurring subscriptions",
+    "Health": "pharmacy, doctor visits, gym, medical expenses",
+    "Fun": "entertainment, movies, concerts, games, streaming services",
+    "Miscellaneous": "anything that doesn't fit the above",
+}
 
 # Merchant -> Category rules (substring match, case-insensitive, first match wins)
 MERCHANT_RULES = {

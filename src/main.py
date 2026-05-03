@@ -20,7 +20,10 @@ from .notion_client import (
     add_transactions,
     existing_txn_ids,
     extract_database_id,
+    fetch_categories,
+    get_categories_db_id,
     get_client,
+    resolve_category,
     validate_schema,
 )
 
@@ -73,21 +76,37 @@ def run_pipeline(
     txns = normalize(rows, mapping)
     log.info("Transactions read: %d  normalized: %d", len(rows), len(txns))
 
-    # Notion dedupe
+    # Notion setup
     notion = get_client()
     db_id = extract_database_id(database_url)
     validate_schema(notion, db_id)
+
+    cats_db_id = get_categories_db_id(notion, db_id)
+    category_map = fetch_categories(notion, cats_db_id)
+    log.info("Categories found in Notion: %s", list(category_map.keys()))
+
     seen = existing_txn_ids(notion, db_id)
 
     new_txns = [t for t in txns if t["id"] not in seen]
     skipped = len(txns) - len(new_txns)
     log.info("Already in Notion: %d  New this run: %d", skipped, len(new_txns))
 
-    categories: List[str] = categorize_batch(new_txns) if new_txns else []
+    # Pass the live Notion category names so the LLM fallback uses whatever the user has in Notion
+    notion_cat_names = list(category_map.keys())
+    categories: List[str] = categorize_batch(new_txns, valid_categories=notion_cat_names) if new_txns else []
+
+    # Resolve category names (e.g., "Food") to Notion page IDs (handles emoji prefixes)
+    category_page_ids: List[str] = []
+    for cat_name in categories:
+        page_id = resolve_category(cat_name, category_map)
+        if page_id is None:
+            log.warning("Could not resolve category '%s' - skipping transaction", cat_name)
+        category_page_ids.append(page_id or "")
 
     written = 0
     if not dry_run and new_txns:
-        written = add_transactions(notion, db_id, new_txns, categories)
+        valid = [(t, pid) for t, pid in zip(new_txns, category_page_ids) if pid]
+        written = add_transactions(notion, db_id, [t for t, _ in valid], [pid for _, pid in valid])
         log.info("Done. Wrote %d transactions.", written)
 
     preview = [
