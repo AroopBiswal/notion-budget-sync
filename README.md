@@ -4,7 +4,7 @@
 
 Import transactions from any bank export (CSV, XLSX, and more) into your Notion budget database.
 
-Available as a **dark-mode web UI** or a **CLI**. Both use the same pipeline.
+Available as a **web UI** or a **CLI**. Both use the same pipeline.
 
 Context: I track my spending on Notion but its time consuming to have to manually add all my purchases one by one. So I made this app to automate it.
 
