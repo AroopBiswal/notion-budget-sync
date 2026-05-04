@@ -7,6 +7,8 @@ let selectedFile = null;
 let lastMapping = null;
 let lastHeaders = [];
 let savedDbUrls = [];
+let pendingRunToken = null;   // set after dry run, cleared when inputs change
+let excluded = new Set();     // txn IDs deselected in dry-run preview
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +46,8 @@ const errorBox    = $("error-box");
 const modalOverlay = $("modal-overlay");
 const modalBody   = $("modal-body");
 const modalClose  = $("modal-close");
+const syncLabel   = $("sync-label");
+const previewHeader = $("preview-header");
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -59,7 +63,7 @@ dropZone.querySelector(".browse-link").addEventListener("click", (e) => {
 });
 
 fileInput.addEventListener("change", () => {
-  if (fileInput.files[0]) selectFile(fileInput.files[0]);
+  if (fileInput.files[0]) { clearPendingRun(); selectFile(fileInput.files[0]); }
 });
 
 dropZone.addEventListener("dragover", (e) => {
@@ -80,9 +84,9 @@ clearFile.addEventListener("click", () => {
   fileInput.value = "";
   fileSelected.hidden = true;
   dropZone.hidden = false;
+  clearPendingRun();
   updateButtons();
   hide(results);
-  hide(savePrompt);
   hide(errorBox);
 });
 
@@ -106,7 +110,6 @@ async function loadProfiles() {
 }
 
 function populateSelect(profiles) {
-  // Keep the Auto-detect option, rebuild the rest
   formatSelect.innerHTML = '<option value="">Auto-detect</option>';
   profiles.forEach((p) => {
     const opt = document.createElement("option");
@@ -114,6 +117,8 @@ function populateSelect(profiles) {
     opt.textContent = p.name;
     formatSelect.appendChild(opt);
   });
+  const last = localStorage.getItem("lastFormatName");
+  if (last && profiles.find((p) => p.name === last)) formatSelect.value = last;
 }
 
 function populateModal(profiles) {
@@ -172,9 +177,15 @@ function populateDbSelect(dbs) {
     opt.textContent = d.name;
     dbSelect.appendChild(opt);
   });
-  // Restore selection if current URL matches a saved entry
-  const match = dbs.find((d) => d.url === notionUrl.value);
-  if (match) dbSelect.value = match.url;
+  // Restore last used URL (from localStorage or current input)
+  const lastUrl = localStorage.getItem("lastDbUrl") || notionUrl.value;
+  const match = dbs.find((d) => d.url === lastUrl);
+  if (match) {
+    dbSelect.value = lastUrl;
+    notionUrl.value = lastUrl;
+  } else if (lastUrl && !notionUrl.value) {
+    notionUrl.value = lastUrl;
+  }
 }
 
 function populateDbModal(dbs) {
@@ -210,11 +221,13 @@ dbSelect.addEventListener("change", () => {
     notionUrl.value = dbSelect.value;
     hide(dbSaveRow);
   }
+  clearPendingRun();
 });
 
 notionUrl.addEventListener("input", () => {
   const match = savedDbUrls.find((d) => d.url === notionUrl.value);
   dbSelect.value = match ? match.url : "";
+  clearPendingRun();
 });
 
 saveDbBtn.addEventListener("click", () => {
@@ -279,14 +292,26 @@ saveBtn.addEventListener("click", async () => {
   }
 });
 
+formatSelect.addEventListener("change", clearPendingRun);
+
+// ── Pending run helpers ───────────────────────────────────────────────────────
+
+function clearPendingRun() {
+  pendingRunToken = null;
+  excluded.clear();
+  syncLabel.textContent = "Sync";
+}
+
 // ── Sync / Dry-run ────────────────────────────────────────────────────────────
 
 dryRunBtn.addEventListener("click", () => runSync(true));
-syncBtn.addEventListener("click", () => runSync(false));
+syncBtn.addEventListener("click", () => {
+  if (pendingRunToken) runSyncConfirmed();
+  else runSync(false);
+});
 
 async function runSync(dryRun) {
   hide(results);
-  hide(savePrompt);
   hide(errorBox);
 
   const url = notionUrl.value.trim();
@@ -306,17 +331,59 @@ async function runSync(dryRun) {
     const data = await res.json();
 
     if (!data.ok) {
+      errorBox.classList.remove("warn");
       show(errorBox, data.error || "An error occurred.");
       return;
     }
 
     lastMapping = data.mapping;
     lastHeaders = data.headers || [];
+
+    if (dryRun && data.run_token) {
+      pendingRunToken = data.run_token;
+      excluded.clear();
+      syncLabel.textContent = "Confirm Sync";
+    } else {
+      clearPendingRun();
+    }
+
+    saveLastUsed();
     renderResults(data, dryRun);
 
-    if (data.is_new_format) {
-      show(savePrompt);
+    if (data.capped) {
+      errorBox.classList.add("warn");
+      show(errorBox, `Run capped at ${data.new} transactions. Increase MAX_TRANSACTIONS_PER_RUN in src/config.py to process more.`);
+    } else {
+      errorBox.classList.remove("warn");
     }
+  } catch (err) {
+    show(errorBox, String(err));
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function runSyncConfirmed() {
+  hide(results);
+  hide(errorBox);
+  setLoading(true, "Syncing...");
+
+  try {
+    const res = await fetch("/api/sync-confirmed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run_token: pendingRunToken, excluded_ids: [...excluded] }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      errorBox.classList.remove("warn");
+      show(errorBox, data.error || "An error occurred.");
+      return;
+    }
+
+    clearPendingRun();
+    renderResults(data, false);
   } catch (err) {
     show(errorBox, String(err));
   } finally {
@@ -333,21 +400,48 @@ function renderResults(data, dryRun) {
     <div class="stat"><span class="stat-value green">${data.new}</span><span class="stat-label">${dryRun ? "Would add" : "Added"}</span></div>
   `;
 
+  if (data.is_new_format) show(savePrompt);
+  else hide(savePrompt);
+
   if (data.preview && data.preview.length) {
-    previewBody.innerHTML = data.preview.map((row) => `
-      <tr>
+    // Build table header (checkbox col only in dry-run)
+    previewHeader.innerHTML = (dryRun ? "<th class='check-th'></th>" : "") +
+      "<th>Date</th><th>Merchant</th><th>Amount</th><th>Category</th>";
+
+    previewBody.innerHTML = data.preview.map((row) => {
+      const isExcluded = excluded.has(row.id);
+      return `<tr class="${isExcluded ? "row-excluded" : ""}" data-id="${esc(row.id || "")}">
+        ${dryRun ? `<td class="check-td"><input type="checkbox" class="row-check" ${isExcluded ? "" : "checked"}></td>` : ""}
         <td>${esc(row.date)}</td>
         <td>${esc(row.merchant)}</td>
         <td class="amount-cell">$${Number(row.amount).toFixed(2)}</td>
         <td><span class="cat-pill">${esc(row.category)}</span></td>
-      </tr>
-    `).join("");
+      </tr>`;
+    }).join("");
+
+    if (dryRun) {
+      previewBody.querySelectorAll(".row-check").forEach((cb) => {
+        cb.addEventListener("change", (e) => {
+          const tr = e.target.closest("tr");
+          const id = tr.dataset.id;
+          if (e.target.checked) { excluded.delete(id); tr.classList.remove("row-excluded"); }
+          else { excluded.add(id); tr.classList.add("row-excluded"); }
+        });
+      });
+    }
+
     show(previewWrap);
   } else {
     hide(previewWrap);
   }
 
   show(results);
+}
+
+function saveLastUsed() {
+  if (notionUrl.value) localStorage.setItem("lastDbUrl", notionUrl.value);
+  if (formatSelect.value) localStorage.setItem("lastFormatName", formatSelect.value);
+  else localStorage.removeItem("lastFormatName");
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

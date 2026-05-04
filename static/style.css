@@ -343,6 +343,18 @@ select {
 
 .preview-table tr:hover td { background: var(--surface-2); }
 
+.preview-table tr.row-excluded td {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
+.check-th, .check-td {
+  width: 32px;
+  padding: 8px 6px 8px 12px;
+}
+
+.row-check { cursor: pointer; accent-color: var(--accent); }
+
 .amount-cell { font-variant-numeric: tabular-nums; }
 
 .cat-pill {
@@ -383,15 +395,21 @@ select {
   color: var(--success);
 }
 
-/* ── Error box ─────────────────────────────────────────────────────────────── */
+/* ── Error / warning boxes ─────────────────────────────────────────────────── */
 .error-box {
-  background: var(--error-dim);
-  border: 1px solid var(--error);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
   font-size: 13px;
-  color: var(--error);
   white-space: pre-wrap;
+  background: var(--error-dim);
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+
+.error-box.warn {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: var(--warning);
+  color: var(--warning);
 }
 
 /* ── Modal ─────────────────────────────────────────────────────────────────── */

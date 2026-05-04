@@ -2,6 +2,8 @@
 import json
 import os
 import tempfile
+import time
+import uuid
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
@@ -29,6 +31,10 @@ def _write_db_urls(data: dict) -> None:
     CACHE_DIR.mkdir(exist_ok=True)
     _DB_URLS_FILE.write_text(json.dumps(data, indent=2))
 from src.main import run_pipeline
+from src.notion_client import add_transactions, get_client as get_notion_client
+
+# token -> {"db_id": str, "pairs": list[dict], "ts": float}
+_run_cache: dict = {}
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
@@ -143,11 +149,55 @@ def sync():
             save_as=save_as,
             dry_run=dry_run,
         )
+        if dry_run:
+            token = str(uuid.uuid4())
+            _run_cache[token] = {
+                "db_id": result.pop("_db_id"),
+                "pairs": result.pop("_pairs"),
+                "ts": time.time(),
+            }
+            # Evict entries older than 1 hour
+            cutoff = time.time() - 3600
+            for k in [k for k, v in _run_cache.items() if v["ts"] < cutoff]:
+                del _run_cache[k]
+            result["run_token"] = token
         return jsonify({"ok": True, **result})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
     finally:
         os.unlink(tmp_path)
+
+
+@app.route("/api/sync-confirmed", methods=["POST"])
+def sync_confirmed():
+    data = request.json or {}
+    token = data.get("run_token", "")
+    excluded = set(data.get("excluded_ids", []))
+
+    cached = _run_cache.pop(token, None)
+    if not cached:
+        return jsonify({"error": "Session expired or not found. Please dry-run again."}), 400
+
+    pairs = [p for p in cached["pairs"] if p["txn"]["id"] not in excluded]
+    total = len(cached["pairs"])
+
+    if not pairs:
+        return jsonify({"ok": True, "read": total, "normalized": total,
+                        "new": 0, "skipped": 0, "written": 0, "capped": False,
+                        "preview": [], "is_new_format": False})
+
+    try:
+        notion = get_notion_client()
+        written = add_transactions(
+            notion, cached["db_id"],
+            [p["txn"] for p in pairs],
+            [p["cat_page_id"] for p in pairs],
+        )
+        return jsonify({"ok": True, "read": total, "normalized": total,
+                        "new": written, "skipped": 0, "written": written,
+                        "capped": False, "preview": [], "is_new_format": False})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 if __name__ == "__main__":

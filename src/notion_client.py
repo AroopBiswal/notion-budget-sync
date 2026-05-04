@@ -23,8 +23,8 @@ def get_client() -> Client:
     return Client(auth=NOTION_TOKEN)
 
 
-def extract_database_id(url_or_id: str) -> str:
-    """Accept a full Notion URL or raw ID and return the 32-char hex database ID."""
+def _extract_id(url_or_id: str) -> str:
+    """Pull the 32-char hex ID out of a Notion URL or raw ID string."""
     clean = url_or_id.split("?")[0].rstrip("/")
     segment = clean.split("/")[-1]
     raw = segment.split("-")[-1].replace("-", "")
@@ -32,6 +32,48 @@ def extract_database_id(url_or_id: str) -> str:
         return raw
     raw2 = segment.replace("-", "")
     return raw2[:32] if len(raw2) >= 32 else url_or_id.replace("-", "")
+
+
+def extract_database_id(notion: Client, url_or_id: str) -> str:
+    """Resolve a Notion URL/ID to the Expenses database ID.
+
+    Accepts either:
+    - A direct database URL/ID (existing behavior)
+    - A page URL/ID — finds the child_database titled "Expenses" on that page
+    """
+    candidate = _extract_id(url_or_id)
+
+    # Try as a database first (direct DB URL)
+    try:
+        notion.databases.retrieve(database_id=candidate)
+        return candidate
+    except Exception:
+        pass
+
+    # Treat as a page — scan children for a database titled "Expenses"
+    try:
+        cursor = None
+        while True:
+            kwargs: Dict = {"block_id": candidate, "page_size": 100}
+            if cursor:
+                kwargs["start_cursor"] = cursor
+            resp = notion.blocks.children.list(**kwargs)
+            for block in resp.get("results", []):
+                if block.get("type") == "child_database":
+                    title = block["child_database"].get("title", "").strip().lower()
+                    if title == "expenses":
+                        return block["id"].replace("-", "")
+            if not resp.get("has_more"):
+                break
+            cursor = resp.get("next_cursor")
+    except Exception:
+        pass
+
+    raise RuntimeError(
+        "Could not find an Expenses database.\n"
+        "Paste the URL of the page containing your budget databases, "
+        "or the direct URL of the Expenses database."
+    )
 
 
 def validate_schema(notion: Client, database_id: str) -> None:

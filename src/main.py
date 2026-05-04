@@ -4,7 +4,7 @@ import logging
 import sys
 from typing import Dict, List, Optional
 
-from .config import NOTION_DATABASE_ID
+from .config import MAX_TRANSACTIONS_PER_RUN, NOTION_DATABASE_ID
 from .ingestion.reader import read_file
 from .ingestion.schema_mapper import (
     delete_profile,
@@ -78,7 +78,7 @@ def run_pipeline(
 
     # Notion setup
     notion = get_client()
-    db_id = extract_database_id(database_url)
+    db_id = extract_database_id(notion, database_url)
     validate_schema(notion, db_id)
 
     cats_db_id = get_categories_db_id(notion, db_id)
@@ -90,6 +90,10 @@ def run_pipeline(
     new_txns = [t for t in txns if t["id"] not in seen]
     skipped = len(txns) - len(new_txns)
     log.info("Already in Notion: %d  New this run: %d", skipped, len(new_txns))
+
+    if len(new_txns) > MAX_TRANSACTIONS_PER_RUN:
+        log.warning("Capping to %d transactions (limit set in src/config.py)", MAX_TRANSACTIONS_PER_RUN)
+        new_txns = new_txns[:MAX_TRANSACTIONS_PER_RUN]
 
     # Pass the live Notion category names so the LLM fallback uses whatever the user has in Notion
     notion_cat_names = list(category_map.keys())
@@ -109,22 +113,36 @@ def run_pipeline(
         written = add_transactions(notion, db_id, [t for t, _ in valid], [pid for _, pid in valid])
         log.info("Done. Wrote %d transactions.", written)
 
+    # In dry run, return all rows with IDs so the UI can show checkboxes.
+    # In a real sync, just the first 50 for the summary preview.
+    preview_txns = new_txns if dry_run else new_txns[:50]
     preview = [
-        {"date": t["date"], "merchant": t["merchant"], "amount": t["amount"], "category": c}
-        for t, c in zip(new_txns[:50], categories[:50])
+        {"id": t["id"], "date": t["date"], "merchant": t["merchant"], "amount": t["amount"], "category": c}
+        for t, c in zip(preview_txns, categories[:len(preview_txns)])
     ]
 
-    return {
+    result: Dict = {
         "read": len(rows),
         "normalized": len(txns),
         "new": len(new_txns),
         "skipped": skipped,
         "written": written,
+        "capped": len(new_txns) == MAX_TRANSACTIONS_PER_RUN,
         "is_new_format": is_new_format,
         "mapping": mapping,
         "headers": headers,
         "preview": preview,
     }
+
+    if dry_run:
+        result["_db_id"] = db_id
+        result["_pairs"] = [
+            {"txn": t, "cat_page_id": pid}
+            for t, pid in zip(new_txns, category_page_ids)
+            if pid
+        ]
+
+    return result
 
 
 def _cli_dry_run_table(preview: List[Dict]) -> None:
