@@ -122,6 +122,7 @@ def run_pipeline(
         "written": written,
         "is_new_format": is_new_format,
         "mapping": mapping,
+        "headers": headers,
         "preview": preview,
     }
 

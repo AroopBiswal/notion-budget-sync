@@ -311,7 +311,7 @@ async function runSync(dryRun) {
     }
 
     lastMapping = data.mapping;
-    lastHeaders = [];
+    lastHeaders = data.headers || [];
     renderResults(data, dryRun);
 
     if (data.is_new_format) {
