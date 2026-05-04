@@ -325,10 +325,12 @@ async function runSync(dryRun) {
 }
 
 function renderResults(data, dryRun) {
+  const filtered = data.read - data.normalized;
   statsEl.innerHTML = `
     <div class="stat"><span class="stat-value">${data.read}</span><span class="stat-label">Read</span></div>
+    ${filtered > 0 ? `<div class="stat"><span class="stat-value warn">${filtered}</span><span class="stat-label">Filtered</span></div>` : ""}
+    <div class="stat"><span class="stat-value muted">${data.skipped}</span><span class="stat-label">In Notion</span></div>
     <div class="stat"><span class="stat-value green">${data.new}</span><span class="stat-label">${dryRun ? "Would add" : "Added"}</span></div>
-    <div class="stat"><span class="stat-value muted">${data.skipped}</span><span class="stat-label">Skipped</span></div>
   `;
 
   if (data.preview && data.preview.length) {

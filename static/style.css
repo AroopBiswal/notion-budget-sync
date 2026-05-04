@@ -306,6 +306,7 @@ select {
 
 .stat-value.green { color: var(--success); }
 .stat-value.muted { color: var(--text-2); }
+.stat-value.warn  { color: var(--warning); }
 
 /* ── Preview table ─────────────────────────────────────────────────────────── */
 .preview-wrap {
