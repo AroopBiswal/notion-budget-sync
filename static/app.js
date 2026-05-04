@@ -193,7 +193,7 @@ function populateDbModal(dbs) {
           <button class="delete-btn" data-name="${esc(d.name)}">Delete</button>
         </div>
       </div>
-      <div class="profile-meta">${esc(d.url)}</div>
+      <div class="profile-meta"><a class="db-url-link" href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.url)}</a></div>
     `;
     card.querySelector(".delete-btn").addEventListener("click", async (e) => {
       const name = e.target.dataset.name;

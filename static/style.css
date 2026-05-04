@@ -476,6 +476,14 @@ select {
   color: var(--text-3);
 }
 
+.db-url-link {
+  color: var(--accent);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.db-url-link:hover { text-decoration: underline; }
+
 .delete-btn {
   background: none;
   border: 1px solid var(--border);
