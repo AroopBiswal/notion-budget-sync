@@ -40,6 +40,24 @@ def find_cached_by_headers(headers: List[str]) -> Tuple[Optional[str], Optional[
     return None, None
 
 
+def _detect_amount_sign(rows: List[Dict], amount_col: str) -> str:
+    """Programmatically detect sign convention by counting positive vs negative amounts."""
+    pos = neg = 0
+    for row in rows[:100]:
+        raw = row.get(amount_col)
+        if raw is None:
+            continue
+        try:
+            val = float(str(raw).replace(",", "").replace("$", ""))
+            if val > 0:
+                pos += 1
+            elif val < 0:
+                neg += 1
+        except (ValueError, TypeError):
+            continue
+    return "positive_is_charge" if pos >= neg else "negative_is_charge"
+
+
 def infer_mapping(headers: List[str], rows: List[Dict]) -> Dict:
     """Call the LLM to infer the column mapping from headers + sample rows."""
     from ..llm.factory import get_provider
@@ -55,7 +73,10 @@ def infer_mapping(headers: List[str], rows: List[Dict]) -> Dict:
         '"amount_sign":"positive_is_charge"|"negative_is_charge"}\n'
         "amount_sign is negative_is_charge if purchases are negative numbers."
     )
-    return provider.complete_json(system, user)
+    mapping = provider.complete_json(system, user)
+    if mapping.get("amount_col"):
+        mapping["amount_sign"] = _detect_amount_sign(rows, mapping["amount_col"])
+    return mapping
 
 
 def save_profile(name: str, mapping: Dict, headers: List[str]) -> str:
