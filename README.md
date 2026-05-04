@@ -8,6 +8,22 @@ Available as a **dark-mode web UI** or a **CLI**. Both use the same pipeline.
 
 Context: I track my spending on Notion but its time consuming to have to manually add all my purchases one by one. So I made this app to automate it.
 
+
+# Features
+
+## Transaction data to Notion (in progress)
+
+- Input: bring your own transaction data in whatever format your bank exports (CSV, XLSX, etc.)
+- Output: data shows up in your Notion budget database, sorted into categories.
+- An LLM detects your file format on the first run and caches the mapping for instant later runs.
+- The same LLM can categorize unknown merchants, or you can let them fall into Miscellaneous.
+
+## Automatic budget tracking via Plaid (coming soon)
+
+- Input: connect your bank or credit card once through Plaid.
+- Output: transactions sync to Notion automatically on a schedule.
+- Removes the manual step from the workflow; same categorization and Notion output, without CSV download.
+
 ---
 
 ## How it works
