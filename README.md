@@ -11,7 +11,7 @@ Context: I track my spending on Notion but its time consuming to have to manuall
 
 # Features
 
-## Transaction data to Notion (in progress)
+## Transaction data to Notion
 
 - Input: bring your own transaction data in whatever format your bank exports (CSV, XLSX, etc.)
 - Output: data shows up in your Notion budget database, sorted into categories.
