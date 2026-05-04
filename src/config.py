@@ -10,7 +10,7 @@ MAX_TRANSACTIONS_PER_RUN = 350  # max new transactions written to Notion per run
 # LLM
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-LLM_CATEGORIZATION = os.getenv("LLM_CATEGORIZATION", "false").lower() == "true"
+LLM_CATEGORIZATION = os.getenv("LLM_CATEGORIZATION", "true").lower() == "true"
 
 # Notion
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")

@@ -7,8 +7,10 @@ let selectedFile = null;
 let lastMapping = null;
 let lastHeaders = [];
 let savedDbUrls = [];
-let pendingRunToken = null;   // set after dry run, cleared when inputs change
-let excluded = new Set();     // txn IDs deselected in dry-run preview
+let pendingRunToken = null;      // set after dry run, cleared when inputs change
+let excluded = new Set();        // txn IDs deselected in dry-run preview
+let categoryOverrides = {};      // {txn_id: new_category_name}
+let availableCategories = [];    // Notion category names from last run
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
@@ -299,7 +301,9 @@ formatSelect.addEventListener("change", clearPendingRun);
 function clearPendingRun() {
   pendingRunToken = null;
   excluded.clear();
+  categoryOverrides = {};
   syncLabel.textContent = "Sync";
+  updateButtons();
 }
 
 // ── Sync / Dry-run ────────────────────────────────────────────────────────────
@@ -342,7 +346,9 @@ async function runSync(dryRun) {
     if (dryRun && data.run_token) {
       pendingRunToken = data.run_token;
       excluded.clear();
+      categoryOverrides = {};
       syncLabel.textContent = "Confirm Sync";
+      updateButtons();
     } else {
       clearPendingRun();
     }
@@ -372,7 +378,11 @@ async function runSyncConfirmed() {
     const res = await fetch("/api/sync-confirmed", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ run_token: pendingRunToken, excluded_ids: [...excluded] }),
+      body: JSON.stringify({
+        run_token: pendingRunToken,
+        excluded_ids: [...excluded],
+        category_overrides: categoryOverrides,
+      }),
     });
     const data = await res.json();
 
@@ -404,18 +414,28 @@ function renderResults(data, dryRun) {
   else hide(savePrompt);
 
   if (data.preview && data.preview.length) {
-    // Build table header (checkbox col only in dry-run)
+    if (dryRun) availableCategories = data.categories || [];
+
     previewHeader.innerHTML = (dryRun ? "<th class='check-th'></th>" : "") +
       "<th>Date</th><th>Merchant</th><th>Amount</th><th>Category</th>";
 
     previewBody.innerHTML = data.preview.map((row) => {
       const isExcluded = excluded.has(row.id);
+      const currentCat = categoryOverrides[row.id] || row.category;
+      const catCell = dryRun && availableCategories.length
+        ? `<td><select class="cat-select" data-id="${esc(row.id)}">${
+            availableCategories.map((c) =>
+              `<option value="${esc(c)}"${c === currentCat ? " selected" : ""}>${esc(c)}</option>`
+            ).join("")
+          }</select></td>`
+        : `<td><span class="cat-pill">${esc(row.category)}</span></td>`;
+
       return `<tr class="${isExcluded ? "row-excluded" : ""}" data-id="${esc(row.id || "")}">
         ${dryRun ? `<td class="check-td"><input type="checkbox" class="row-check" ${isExcluded ? "" : "checked"}></td>` : ""}
         <td>${esc(row.date)}</td>
         <td>${esc(row.merchant)}</td>
         <td class="amount-cell">$${Number(row.amount).toFixed(2)}</td>
-        <td><span class="cat-pill">${esc(row.category)}</span></td>
+        ${catCell}
       </tr>`;
     }).join("");
 
@@ -426,6 +446,14 @@ function renderResults(data, dryRun) {
           const id = tr.dataset.id;
           if (e.target.checked) { excluded.delete(id); tr.classList.remove("row-excluded"); }
           else { excluded.add(id); tr.classList.add("row-excluded"); }
+        });
+      });
+      previewBody.querySelectorAll(".cat-select").forEach((sel) => {
+        sel.addEventListener("change", (e) => {
+          const id = e.target.dataset.id;
+          const orig = data.preview.find((r) => r.id === id)?.category;
+          if (e.target.value !== orig) categoryOverrides[id] = e.target.value;
+          else delete categoryOverrides[id];
         });
       });
     }
@@ -447,9 +475,8 @@ function saveLastUsed() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function updateButtons() {
-  const ready = !!selectedFile;
-  dryRunBtn.disabled = !ready;
-  syncBtn.disabled = !ready;
+  dryRunBtn.disabled = !selectedFile;
+  syncBtn.disabled = !pendingRunToken;
 }
 
 function setLoading(on, msg = "") {

@@ -19,25 +19,17 @@ def categorize(merchant: str) -> str:
 def categorize_batch(txns: List[Dict], valid_categories: Optional[List[str]] = None) -> List[str]:
     """Return a category string for each transaction in txns (parallel list).
 
-    valid_categories: the list fetched live from Notion. Falls back to config.CATEGORIES
-    if not provided. Used to constrain the LLM fallback to categories that actually exist.
+    When LLM_CATEGORIZATION is true, all transactions are sent to the LLM.
+    When false, falls back to rule-based matching only.
     """
     effective_cats = valid_categories if valid_categories is not None else CATEGORIES
-    categories: List[Optional[str]] = []
-    unmatched: List[int] = []
 
-    for i, txn in enumerate(txns):
-        cat = categorize(txn["merchant"])
-        if cat == FALLBACK_CATEGORY and LLM_CATEGORIZATION:
-            categories.append(None)
-            unmatched.append(i)
-        else:
-            categories.append(cat)
+    if LLM_CATEGORIZATION:
+        categories: List[Optional[str]] = [None] * len(txns)
+        _llm_fill(txns, categories, list(range(len(txns))), effective_cats)
+        return [c or FALLBACK_CATEGORY for c in categories]
 
-    if unmatched:
-        _llm_fill(txns, categories, unmatched, effective_cats)
-
-    return [c or FALLBACK_CATEGORY for c in categories]
+    return [categorize(t["merchant"]) for t in txns]
 
 
 def _llm_fill(txns: List[Dict], categories: List, indices: List[int], valid_categories: List[str]) -> None:
@@ -50,11 +42,12 @@ def _llm_fill(txns: List[Dict], categories: List, indices: List[int], valid_cate
         merchants = [txns[i]["merchant"] for i in batch]
         n = len(merchants)
 
-        system = "Categorize merchants. JSON only."
+        cats = ",".join(valid_categories)
+        system = "You are a transaction categorizer. Reply with JSON only."
         user = (
-            f"Categories: {valid_categories}\n"
-            + "\n".join(f"{j + 1}. {m}" for j, m in enumerate(merchants))
-            + f'\nReturn: {{"categories":[...]}} with {n} items.'
+            f"Categories: {cats}\n"
+            + "\n".join(f"{j+1}.{m}" for j, m in enumerate(merchants))
+            + f'\nReturn: {{"categories":[...{n} items]}}'
         )
 
         try:

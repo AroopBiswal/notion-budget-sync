@@ -79,6 +79,7 @@ def run_pipeline(
     # Notion setup
     notion = get_client()
     db_id = extract_database_id(notion, database_url)
+    log.info("Resolved database ID: %s", db_id)
     validate_schema(notion, db_id)
 
     cats_db_id = get_categories_db_id(notion, db_id)
@@ -131,11 +132,13 @@ def run_pipeline(
         "is_new_format": is_new_format,
         "mapping": mapping,
         "headers": headers,
+        "categories": notion_cat_names,
         "preview": preview,
     }
 
     if dry_run:
         result["_db_id"] = db_id
+        result["_category_map"] = category_map
         result["_pairs"] = [
             {"txn": t, "cat_page_id": pid}
             for t, pid in zip(new_txns, category_page_ids)

@@ -31,7 +31,7 @@ def _write_db_urls(data: dict) -> None:
     CACHE_DIR.mkdir(exist_ok=True)
     _DB_URLS_FILE.write_text(json.dumps(data, indent=2))
 from src.main import run_pipeline
-from src.notion_client import add_transactions, get_client as get_notion_client
+from src.notion_client import add_transactions, get_client as get_notion_client, resolve_category
 
 # token -> {"db_id": str, "pairs": list[dict], "ts": float}
 _run_cache: dict = {}
@@ -154,6 +154,7 @@ def sync():
             _run_cache[token] = {
                 "db_id": result.pop("_db_id"),
                 "pairs": result.pop("_pairs"),
+                "category_map": result.pop("_category_map"),
                 "ts": time.time(),
             }
             # Evict entries older than 1 hour
@@ -173,12 +174,24 @@ def sync_confirmed():
     data = request.json or {}
     token = data.get("run_token", "")
     excluded = set(data.get("excluded_ids", []))
+    category_overrides = data.get("category_overrides", {})  # {txn_id: cat_name}
 
     cached = _run_cache.pop(token, None)
     if not cached:
-        return jsonify({"error": "Session expired or not found. Please dry-run again."}), 400
+        return jsonify({"error": "Session expired or not found. Please run again."}), 400
 
-    pairs = [p for p in cached["pairs"] if p["txn"]["id"] not in excluded]
+    pairs = []
+    for p in cached["pairs"]:
+        txn_id = p["txn"]["id"]
+        if txn_id in excluded:
+            continue
+        cat_page_id = p["cat_page_id"]
+        if txn_id in category_overrides:
+            new_pid = resolve_category(category_overrides[txn_id], cached["category_map"])
+            if new_pid:
+                cat_page_id = new_pid
+        pairs.append({"txn": p["txn"], "cat_page_id": cat_page_id})
+
     total = len(cached["pairs"])
 
     if not pairs:
