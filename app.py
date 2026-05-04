@@ -1,4 +1,5 @@
 """Flask web app entry point."""
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -6,11 +7,27 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 
 from src.ingestion.schema_mapper import (
+    CACHE_DIR,
     delete_profile,
     load_profiles,
     save_profile,
     update_profile_fields,
 )
+
+# ── DB URL storage ────────────────────────────────────────────────────────────
+
+_DB_URLS_FILE = CACHE_DIR / "db_urls.json"
+
+
+def _load_db_urls() -> dict:
+    if not _DB_URLS_FILE.exists():
+        return {}
+    return json.loads(_DB_URLS_FILE.read_text())
+
+
+def _write_db_urls(data: dict) -> None:
+    CACHE_DIR.mkdir(exist_ok=True)
+    _DB_URLS_FILE.write_text(json.dumps(data, indent=2))
 from src.main import run_pipeline
 
 app = Flask(__name__)
@@ -53,6 +70,35 @@ def patch_profile(name: str):
     ok = update_profile_fields(name, data)
     if not ok:
         return jsonify({"error": "Profile not found"}), 404
+    return jsonify({"ok": True})
+
+
+@app.route("/api/db-urls")
+def list_db_urls():
+    urls = _load_db_urls()
+    return jsonify([{"name": k, "url": v} for k, v in urls.items()])
+
+
+@app.route("/api/db-urls", methods=["POST"])
+def add_db_url():
+    data = request.json or {}
+    name = (data.get("name") or "").strip()
+    url = (data.get("url") or "").strip()
+    if not name or not url:
+        return jsonify({"error": "name and url required"}), 400
+    urls = _load_db_urls()
+    urls[name] = url
+    _write_db_urls(urls)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/db-urls/<path:name>", methods=["DELETE"])
+def remove_db_url(name: str):
+    urls = _load_db_urls()
+    if name not in urls:
+        return jsonify({"ok": False}), 404
+    del urls[name]
+    _write_db_urls(urls)
     return jsonify({"ok": True})
 
 

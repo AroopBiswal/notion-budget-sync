@@ -117,6 +117,15 @@ select {
 
 .format-row select { flex: 1; }
 
+/* ── URL input row ─────────────────────────────────────────────────────────── */
+.url-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.url-input-row input { flex: 1; }
+
 /* ── Icon button ───────────────────────────────────────────────────────────── */
 .icon-btn {
   display: flex;

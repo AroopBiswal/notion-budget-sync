@@ -6,6 +6,7 @@ const $ = (id) => document.getElementById(id);
 let selectedFile = null;
 let lastMapping = null;
 let lastHeaders = [];
+let savedDbUrls = [];
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,16 @@ const fileSelected = $("file-selected");
 const fileName    = $("file-name");
 const clearFile   = $("clear-file");
 const notionUrl   = $("notion-url");
+const dbSelect    = $("db-select");
+const saveDbBtn   = $("save-db-btn");
+const dbSaveRow   = $("db-save-row");
+const dbSaveName  = $("db-save-name");
+const dbSaveConfirm = $("db-save-confirm");
+const dbSaveCancel  = $("db-save-cancel");
+const manageDbBtn = $("manage-db-btn");
+const dbModalOverlay = $("db-modal-overlay");
+const dbModalBody = $("db-modal-body");
+const dbModalClose = $("db-modal-close");
 const formatSelect = $("format-select");
 const manageBtn   = $("manage-btn");
 const dryRunBtn   = $("dry-run-btn");
@@ -37,6 +48,7 @@ const modalClose  = $("modal-close");
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 loadProfiles();
+loadDbUrls();
 
 // ── File handling ─────────────────────────────────────────────────────────────
 
@@ -139,6 +151,106 @@ function populateModal(profiles) {
 manageBtn.addEventListener("click", () => {
   loadProfiles();
   modalOverlay.hidden = false;
+});
+
+// ── DB URL management ─────────────────────────────────────────────────────────
+
+async function loadDbUrls() {
+  try {
+    const res = await fetch("/api/db-urls");
+    savedDbUrls = await res.json();
+    populateDbSelect(savedDbUrls);
+    populateDbModal(savedDbUrls);
+  } catch (_) {}
+}
+
+function populateDbSelect(dbs) {
+  dbSelect.innerHTML = '<option value="">Select saved database...</option>';
+  dbs.forEach((d) => {
+    const opt = document.createElement("option");
+    opt.value = d.url;
+    opt.textContent = d.name;
+    dbSelect.appendChild(opt);
+  });
+  // Restore selection if current URL matches a saved entry
+  const match = dbs.find((d) => d.url === notionUrl.value);
+  if (match) dbSelect.value = match.url;
+}
+
+function populateDbModal(dbs) {
+  if (!dbs.length) {
+    dbModalBody.innerHTML = '<p class="empty-state">No databases saved yet.</p>';
+    return;
+  }
+  dbModalBody.innerHTML = "";
+  dbs.forEach((d) => {
+    const card = document.createElement("div");
+    card.className = "profile-card";
+    card.innerHTML = `
+      <div class="profile-card-header">
+        <span class="profile-name">${esc(d.name)}</span>
+        <div class="profile-actions">
+          <button class="delete-btn" data-name="${esc(d.name)}">Delete</button>
+        </div>
+      </div>
+      <div class="profile-meta">${esc(d.url)}</div>
+    `;
+    card.querySelector(".delete-btn").addEventListener("click", async (e) => {
+      const name = e.target.dataset.name;
+      if (!confirm(`Delete "${name}"?`)) return;
+      await fetch(`/api/db-urls/${encodeURIComponent(name)}`, { method: "DELETE" });
+      await loadDbUrls();
+    });
+    dbModalBody.appendChild(card);
+  });
+}
+
+dbSelect.addEventListener("change", () => {
+  if (dbSelect.value) {
+    notionUrl.value = dbSelect.value;
+    hide(dbSaveRow);
+  }
+});
+
+notionUrl.addEventListener("input", () => {
+  const match = savedDbUrls.find((d) => d.url === notionUrl.value);
+  dbSelect.value = match ? match.url : "";
+});
+
+saveDbBtn.addEventListener("click", () => {
+  if (!notionUrl.value.trim()) return;
+  dbSaveRow.hidden = !dbSaveRow.hidden;
+  if (!dbSaveRow.hidden) dbSaveName.focus();
+});
+
+dbSaveConfirm.addEventListener("click", async () => {
+  const name = dbSaveName.value.trim();
+  const url = notionUrl.value.trim();
+  if (!name || !url) { dbSaveName.focus(); return; }
+  const res = await fetch("/api/db-urls", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, url }),
+  });
+  const data = await res.json();
+  if (data.ok) {
+    dbSaveName.value = "";
+    hide(dbSaveRow);
+    await loadDbUrls();
+    dbSelect.value = url;
+  }
+});
+
+dbSaveCancel.addEventListener("click", () => { hide(dbSaveRow); dbSaveName.value = ""; });
+
+manageDbBtn.addEventListener("click", () => {
+  loadDbUrls();
+  dbModalOverlay.hidden = false;
+});
+
+dbModalClose.addEventListener("click", () => { dbModalOverlay.hidden = true; });
+dbModalOverlay.addEventListener("click", (e) => {
+  if (e.target === dbModalOverlay) dbModalOverlay.hidden = true;
 });
 
 modalClose.addEventListener("click", () => { modalOverlay.hidden = true; });
