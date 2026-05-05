@@ -104,7 +104,14 @@
 
       <!-- Results -->
       <div class="results" id="results" hidden>
-        <div class="stats" id="stats"></div>
+        <div class="stats-row">
+          <div class="stats" id="stats"></div>
+          <div class="month-filter" id="month-filter" hidden>
+            <select id="month-select">
+              <option value="all">All months</option>
+            </select>
+          </div>
+        </div>
 
         <!-- Save profile prompt (shown above transactions when new format detected) -->
         <div class="save-prompt" id="save-prompt" hidden>

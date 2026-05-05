@@ -279,10 +279,24 @@ select {
 /* ── Results ───────────────────────────────────────────────────────────────── */
 .results { display: flex; flex-direction: column; gap: 16px; }
 
+.stats-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .stats {
   display: flex;
   gap: 20px;
   flex-wrap: wrap;
+}
+
+.month-filter select {
+  width: auto;
+  font-size: 13px;
+  padding: 6px 28px 6px 10px;
 }
 
 .stat {

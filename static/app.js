@@ -11,6 +11,7 @@ let pendingRunToken = null;      // set after dry run, cleared when inputs chang
 let excluded = new Set();        // txn IDs deselected in dry-run preview
 let categoryOverrides = {};      // {txn_id: new_category_name}
 let availableCategories = [];    // Notion category names from last run
+let previewData = [];            // full preview rows from last dry run
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
@@ -48,8 +49,10 @@ const errorBox    = $("error-box");
 const modalOverlay = $("modal-overlay");
 const modalBody   = $("modal-body");
 const modalClose  = $("modal-close");
-const syncLabel   = $("sync-label");
+const syncLabel     = $("sync-label");
 const previewHeader = $("preview-header");
+const monthFilter   = $("month-filter");
+const monthSelect   = $("month-select");
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -302,7 +305,10 @@ function clearPendingRun() {
   pendingRunToken = null;
   excluded.clear();
   categoryOverrides = {};
+  previewData = [];
   syncLabel.textContent = "Sync";
+  hide(monthFilter);
+  monthSelect.innerHTML = '<option value="all">All months</option>';
   updateButtons();
 }
 
@@ -414,7 +420,11 @@ function renderResults(data, dryRun) {
   else hide(savePrompt);
 
   if (data.preview && data.preview.length) {
-    if (dryRun) availableCategories = data.categories || [];
+    if (dryRun) {
+      availableCategories = data.categories || [];
+      previewData = data.preview;
+      populateMonthFilter(data.preview);
+    }
 
     previewHeader.innerHTML = (dryRun ? "<th class='check-th'></th>" : "") +
       "<th>Date</th><th>Merchant</th><th>Amount</th><th>Category</th>";
@@ -465,6 +475,53 @@ function renderResults(data, dryRun) {
 
   show(results);
 }
+
+// ── Month filter ──────────────────────────────────────────────────────────────
+
+function populateMonthFilter(preview) {
+  // Extract unique months sorted chronologically
+  const seen = new Map(); // "YYYY-MM" -> label
+  preview.forEach((row) => {
+    const [y, m] = row.date.split("-");
+    const key = `${y}-${m}`;
+    if (!seen.has(key)) {
+      const label = new Date(y, m - 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      seen.set(key, label);
+    }
+  });
+
+  if (seen.size <= 1) return; // only one month — no need to show the filter
+
+  monthSelect.innerHTML = '<option value="all">All months</option>';
+  [...seen.entries()].sort().forEach(([key, label]) => {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = label;
+    monthSelect.appendChild(opt);
+  });
+  show(monthFilter);
+}
+
+function applyMonthFilter(selectedKey) {
+  // Reset excluded to only month-based exclusions, preserving nothing else
+  excluded.clear();
+  if (selectedKey !== "all") {
+    previewData.forEach((row) => {
+      const [y, m] = row.date.split("-");
+      if (`${y}-${m}` !== selectedKey) excluded.add(row.id);
+    });
+  }
+
+  // Sync checkboxes and row styles to match
+  previewBody.querySelectorAll("tr[data-id]").forEach((tr) => {
+    const isExcluded = excluded.has(tr.dataset.id);
+    tr.classList.toggle("row-excluded", isExcluded);
+    const cb = tr.querySelector(".row-check");
+    if (cb) cb.checked = !isExcluded;
+  });
+}
+
+monthSelect.addEventListener("change", () => applyMonthFilter(monthSelect.value));
 
 function saveLastUsed() {
   if (notionUrl.value) localStorage.setItem("lastDbUrl", notionUrl.value);
