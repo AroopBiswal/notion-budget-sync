@@ -9,5 +9,6 @@ dist/
 build/
 .venv/
 venv/
-transactions/
+transactions/*
+!transactions/README.md
 *.tmp

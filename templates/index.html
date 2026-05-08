@@ -72,9 +72,10 @@
             <line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
           <p class="drop-primary">Drop your file here or <span class="browse-link">browse</span></p>
-          <p class="drop-hint">CSV, XLSX, TSV, XLS, JSON</p>
+          <p class="drop-hint">CSV, XLSX, TSV, XLS, JSON &nbsp;·&nbsp; <span class="browse-link" id="txn-folder-link">pick from transactions/</span></p>
           <input type="file" id="file-input" accept=".csv,.tsv,.xlsx,.xls,.json" hidden />
         </div>
+        <div class="txn-picker" id="txn-picker" hidden></div>
         <div class="file-selected" id="file-selected" hidden>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"/>

@@ -20,6 +20,8 @@ const fileInput   = $("file-input");
 const fileSelected = $("file-selected");
 const fileName    = $("file-name");
 const clearFile   = $("clear-file");
+const txnFolderLink = $("txn-folder-link");
+const txnPicker   = $("txn-picker");
 const notionUrl   = $("notion-url");
 const dbSelect    = $("db-select");
 const saveDbBtn   = $("save-db-btn");
@@ -62,9 +64,46 @@ loadDbUrls();
 // ── File handling ─────────────────────────────────────────────────────────────
 
 dropZone.addEventListener("click", () => fileInput.click());
-dropZone.querySelector(".browse-link").addEventListener("click", (e) => {
+dropZone.querySelector(".browse-link:not(#txn-folder-link)").addEventListener("click", (e) => {
   e.stopPropagation();
   fileInput.click();
+});
+
+txnFolderLink.addEventListener("click", async (e) => {
+  e.stopPropagation();
+  if (!txnPicker.hidden) { txnPicker.hidden = true; return; }
+  txnPicker.innerHTML = '<div class="txn-picker-empty">Loading…</div>';
+  txnPicker.hidden = false;
+  try {
+    const res = await fetch("/api/transaction-files");
+    const files = await res.json();
+    if (!files.length) {
+      txnPicker.innerHTML = '<div class="txn-picker-empty">No files in transactions/</div>';
+      return;
+    }
+    txnPicker.innerHTML = files.map((f) =>
+      `<div class="txn-picker-file" data-name="${esc(f.name)}">${esc(f.name)}</div>`
+    ).join("");
+    txnPicker.querySelectorAll(".txn-picker-file").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const name = el.dataset.name;
+        txnPicker.hidden = true;
+        const fileRes = await fetch(`/api/transaction-files/${encodeURIComponent(name)}`);
+        const blob = await fileRes.blob();
+        const file = new File([blob], name, { type: blob.type });
+        clearPendingRun();
+        selectFile(file);
+      });
+    });
+  } catch (err) {
+    txnPicker.innerHTML = `<div class="txn-picker-empty">Error: ${esc(String(err))}</div>`;
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!txnPicker.hidden && !txnPicker.contains(e.target) && e.target !== txnFolderLink) {
+    txnPicker.hidden = true;
+  }
 });
 
 fileInput.addEventListener("change", () => {
@@ -89,6 +128,7 @@ clearFile.addEventListener("click", () => {
   fileInput.value = "";
   fileSelected.hidden = true;
   dropZone.hidden = false;
+  txnPicker.hidden = true;
   clearPendingRun();
   updateButtons();
   hide(results);
@@ -100,6 +140,7 @@ function selectFile(file) {
   fileName.textContent = file.name;
   fileSelected.hidden = false;
   dropZone.hidden = true;
+  txnPicker.hidden = true;
   updateButtons();
 }
 

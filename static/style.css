@@ -186,6 +186,38 @@ select {
   color: var(--text-3);
 }
 
+/* ── Transactions folder picker ────────────────────────────────────────────── */
+.txn-picker {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.txn-picker-file {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+
+.txn-picker-file:last-child { border-bottom: none; }
+
+.txn-picker-file:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.txn-picker-empty {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-3);
+  text-align: center;
+}
+
 /* ── File selected ─────────────────────────────────────────────────────────── */
 .file-selected {
   display: flex;

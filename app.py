@@ -6,7 +6,7 @@ import time
 import uuid
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
 
 from src.ingestion.schema_mapper import (
     CACHE_DIR,
@@ -19,6 +19,8 @@ from src.ingestion.schema_mapper import (
 # ── DB URL storage ────────────────────────────────────────────────────────────
 
 _DB_URLS_FILE = CACHE_DIR / "db_urls.json"
+_TRANSACTIONS_DIR = Path(__file__).parent / "transactions"
+_TRANSACTION_EXTS = {".csv", ".tsv", ".xlsx", ".xls", ".json"}
 
 
 def _load_db_urls() -> dict:
@@ -106,6 +108,29 @@ def remove_db_url(name: str):
     del urls[name]
     _write_db_urls(urls)
     return jsonify({"ok": True})
+
+
+@app.route("/api/transaction-files")
+def list_transaction_files():
+    if not _TRANSACTIONS_DIR.exists():
+        return jsonify([])
+    files = sorted(
+        ({"name": f.name, "size": f.stat().st_size}
+         for f in _TRANSACTIONS_DIR.iterdir()
+         if f.is_file() and f.suffix.lower() in _TRANSACTION_EXTS),
+        key=lambda x: x["name"],
+    )
+    return jsonify(files)
+
+
+@app.route("/api/transaction-files/<path:filename>")
+def get_transaction_file(filename: str):
+    target = (_TRANSACTIONS_DIR / filename).resolve()
+    if not str(target).startswith(str(_TRANSACTIONS_DIR.resolve())):
+        return jsonify({"error": "Invalid path"}), 400
+    if not target.exists():
+        return jsonify({"error": "File not found"}), 404
+    return send_file(target)
 
 
 @app.route("/api/profiles/save", methods=["POST"])
