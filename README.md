@@ -9,6 +9,10 @@ Available as a **web UI** or a **CLI**. Both use the same pipeline.
 Context: I track my spending on Notion but its time consuming to have to manually add all my purchases one by one. So I made this app to automate it.
 
 
+<img width="719" height="646" alt="image" src="https://github.com/user-attachments/assets/b98e4822-5e7b-481b-ac74-5e2f7096d48a" />
+
+
+
 # Features
 
 ## Transaction data to Notion
