@@ -49,11 +49,32 @@ body {
   margin-bottom: 32px;
 }
 
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .logo {
   font-size: 17px;
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.3px;
+}
+
+.made-by {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.made-by-link {
+  color: var(--text-3);
+  text-decoration: none;
+}
+
+.made-by-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
