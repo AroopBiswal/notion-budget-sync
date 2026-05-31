@@ -55,6 +55,11 @@ const syncLabel     = $("sync-label");
 const previewHeader = $("preview-header");
 const monthFilter   = $("month-filter");
 const monthSelect   = $("month-select");
+const settingsBtn   = $("settings-btn");
+const settingsModalOverlay = $("settings-modal-overlay");
+const settingsModalClose   = $("settings-modal-close");
+const settingsSaveBtn      = $("settings-save-btn");
+const settingsRestart      = $("settings-restart");
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -563,6 +568,72 @@ function applyMonthFilter(selectedKey) {
 }
 
 monthSelect.addEventListener("change", () => applyMonthFilter(monthSelect.value));
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+settingsBtn.addEventListener("click", openSettings);
+settingsModalClose.addEventListener("click", () => { settingsModalOverlay.hidden = true; });
+settingsModalOverlay.addEventListener("click", (e) => {
+  if (e.target === settingsModalOverlay) settingsModalOverlay.hidden = true;
+});
+
+async function openSettings() {
+  hide(settingsRestart);
+  $("settings-anthropic").value = "";
+  $("settings-openai").value = "";
+  $("settings-notion").value = "";
+  settingsModalOverlay.hidden = false;
+
+  try {
+    const res = await fetch("/api/settings");
+    const s = await res.json();
+
+    const fields = [
+      ["anthropic", "ANTHROPIC_API_KEY"],
+      ["openai",    "OPENAI_API_KEY"],
+      ["notion",    "NOTION_TOKEN"],
+    ];
+    fields.forEach(([id, key]) => {
+      const hint = $(`hint-${id}`);
+      const info = s[key] || {};
+      if (info.set && info.hint) {
+        hint.textContent = `Currently set: ${info.hint}  — leave blank to keep`;
+      } else if (info.set) {
+        hint.textContent = "Currently set — leave blank to keep";
+      } else {
+        hint.textContent = "Not set";
+      }
+    });
+
+    $("settings-llm").checked = !!s["LLM_CATEGORIZATION"];
+  } catch (_) {}
+}
+
+settingsSaveBtn.addEventListener("click", async () => {
+  const payload = {
+    ANTHROPIC_API_KEY: $("settings-anthropic").value,
+    OPENAI_API_KEY:    $("settings-openai").value,
+    NOTION_TOKEN:      $("settings-notion").value,
+    LLM_CATEGORIZATION: $("settings-llm").checked,
+  };
+
+  settingsSaveBtn.disabled = true;
+  try {
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (data.restart_required) show(settingsRestart);
+      // Refresh hints
+      openSettings();
+    }
+  } finally {
+    settingsSaveBtn.disabled = false;
+  }
+});
 
 function saveLastUsed() {
   if (notionUrl.value) localStorage.setItem("lastDbUrl", notionUrl.value);

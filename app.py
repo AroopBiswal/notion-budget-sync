@@ -21,6 +21,43 @@ from src.ingestion.schema_mapper import (
 _DB_URLS_FILE = CACHE_DIR / "db_urls.json"
 _TRANSACTIONS_DIR = Path(__file__).parent / "transactions"
 _TRANSACTION_EXTS = {".csv", ".tsv", ".xlsx", ".xls", ".json"}
+_ENV_FILE = Path(__file__).parent / ".env"
+_ENV_KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "NOTION_TOKEN", "LLM_CATEGORIZATION"]
+
+
+def _read_env_file() -> dict:
+    """Parse .env file into a dict, preserving all lines including comments."""
+    if not _ENV_FILE.exists():
+        return {}
+    vals = {}
+    for line in _ENV_FILE.read_text().splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            k, _, v = stripped.partition("=")
+            vals[k.strip()] = v.strip()
+    return vals
+
+
+def _write_env_file(updates: dict) -> None:
+    """Write updates into .env, preserving comments and existing structure."""
+    lines = _ENV_FILE.read_text().splitlines() if _ENV_FILE.exists() else []
+    written = set()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in updates:
+                new_lines.append(f"{key}={updates[key]}")
+                written.add(key)
+            else:
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+    for key, val in updates.items():
+        if key not in written:
+            new_lines.append(f"{key}={val}")
+    _ENV_FILE.write_text("\n".join(new_lines) + "\n")
 
 
 def _load_db_urls() -> dict:
@@ -131,6 +168,39 @@ def get_transaction_file(filename: str):
     if not target.exists():
         return jsonify({"error": "File not found"}), 404
     return send_file(target)
+
+
+@app.route("/api/settings")
+def get_settings():
+    vals = _read_env_file()
+    result = {}
+    for key in _ENV_KEYS:
+        v = vals.get(key, "")
+        if key == "LLM_CATEGORIZATION":
+            result[key] = v.lower() == "true"
+        else:
+            result[key] = {"set": bool(v), "hint": (v[:8] + "...") if len(v) > 12 else ""}
+    return jsonify(result)
+
+
+@app.route("/api/settings", methods=["POST"])
+def update_settings():
+    data = request.json or {}
+    updates = {}
+    vals = _read_env_file()
+    for key in _ENV_KEYS:
+        if key == "LLM_CATEGORIZATION":
+            if key in data:
+                updates[key] = "true" if data[key] else "false"
+        else:
+            new_val = (data.get(key) or "").strip()
+            if new_val:
+                updates[key] = new_val
+            elif key in data and data[key] == "":
+                updates[key] = ""
+    if updates:
+        _write_env_file(updates)
+    return jsonify({"ok": True, "restart_required": bool(updates)})
 
 
 @app.route("/api/profiles/save", methods=["POST"])

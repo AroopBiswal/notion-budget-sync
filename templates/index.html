@@ -10,6 +10,11 @@
   <div class="app">
     <header class="header">
       <span class="logo">notion-budget-sync</span>
+      <button class="icon-btn" id="settings-btn" title="API keys & settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
     </header>
 
     <main class="card">
@@ -167,6 +172,50 @@
       </div>
       <div class="modal-body" id="db-modal-body">
         <p class="empty-state">No databases saved yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal-overlay" id="settings-modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>API Keys &amp; Settings</h2>
+        <button class="icon-btn" id="settings-modal-close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" id="settings-modal-body">
+        <div class="field">
+          <label>Anthropic API Key</label>
+          <input type="password" id="settings-anthropic" autocomplete="off" spellcheck="false" />
+          <p class="settings-hint" id="hint-anthropic"></p>
+        </div>
+        <div class="field">
+          <label>OpenAI API Key</label>
+          <input type="password" id="settings-openai" autocomplete="off" spellcheck="false" />
+          <p class="settings-hint" id="hint-openai"></p>
+        </div>
+        <div class="field">
+          <label>Notion Token</label>
+          <input type="password" id="settings-notion" autocomplete="off" spellcheck="false" />
+          <p class="settings-hint" id="hint-notion"></p>
+        </div>
+        <div class="field settings-toggle-row">
+          <label class="settings-toggle-label">
+            <input type="checkbox" id="settings-llm" />
+            LLM categorization
+          </label>
+          <p class="settings-hint">Uses LLM to auto-assign categories. Disable to use rule-based matching only.</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="settings-save-btn">Save</button>
+        </div>
+        <p class="settings-restart" id="settings-restart" hidden>
+          Restart the server for changes to take effect (<code>python app.py</code>).
+        </p>
       </div>
     </div>
   </div>

@@ -43,6 +43,9 @@ body {
 }
 
 .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 32px;
 }
 
@@ -467,6 +470,52 @@ select {
   background: rgba(245, 158, 11, 0.1);
   border-color: var(--warning);
   color: var(--warning);
+}
+
+/* ── Settings modal helpers ────────────────────────────────────────────────── */
+.settings-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.settings-toggle-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.settings-toggle-label input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.settings-restart {
+  font-size: 12px;
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.settings-restart code {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
 }
 
 /* ── Modal ─────────────────────────────────────────────────────────────────── */
