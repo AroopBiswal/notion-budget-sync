@@ -1,0 +1,15 @@
+{
+  "apps": [
+    {
+      "name": "Notion Budget Sync",
+      "slug": "notion-budget-sync",
+      "port": 5000,
+      "start_command": "python3 app.py",
+      "bundle_id": "com.user.notion-budget-sync",
+      "version": "0.1.0",
+      "polyfill_path": "",
+      "backend_port": null,
+      "backend_start_command": null
+    }
+  ]
+}

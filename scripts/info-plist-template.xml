@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>            <string>__APP_NAME__</string>
+    <key>CFBundleDisplayName</key>     <string>__APP_NAME__</string>
+    <key>CFBundleIdentifier</key>      <string>__BUNDLE_ID__</string>
+    <key>CFBundleVersion</key>         <string>__VERSION__</string>
+    <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+    <key>CFBundleExecutable</key>      <string>launcher</string>
+    <key>CFBundleIconFile</key>        <string>AppIcon</string>
+    <key>CFBundlePackageType</key>     <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>  <string>11.0</string>
+    <key>NSHighResolutionCapable</key> <true/>
+    <key>LSUIElement</key>             <false/>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>__APP_NAME__ needs access to your Documents folder to run the project server.</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>__APP_NAME__ needs access to run the project server from your Desktop folder.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>__APP_NAME__ needs access to run the project server from your Downloads folder.</string>
+</dict>
+</plist>
