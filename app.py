@@ -196,8 +196,7 @@ def update_settings():
             new_val = (data.get(key) or "").strip()
             if new_val:
                 updates[key] = new_val
-            elif key in data and data[key] == "":
-                updates[key] = ""
+            # blank = keep existing key unchanged
     if updates:
         _write_env_file(updates)
     return jsonify({"ok": True, "restart_required": bool(updates)})

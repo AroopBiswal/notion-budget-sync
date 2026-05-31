@@ -55,11 +55,10 @@ const syncLabel     = $("sync-label");
 const previewHeader = $("preview-header");
 const monthFilter   = $("month-filter");
 const monthSelect   = $("month-select");
-const settingsBtn   = $("settings-btn");
+const settingsBtn          = $("settings-btn");
 const settingsModalOverlay = $("settings-modal-overlay");
 const settingsModalClose   = $("settings-modal-close");
-const settingsSaveBtn      = $("settings-save-btn");
-const settingsRestart      = $("settings-restart");
+const settingsModalBody    = $("settings-modal-body");
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -571,6 +570,12 @@ monthSelect.addEventListener("change", () => applyMonthFilter(monthSelect.value)
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+const SETTINGS_KEYS = [
+  { key: "ANTHROPIC_API_KEY", label: "Anthropic API Key",  url: "console.anthropic.com" },
+  { key: "OPENAI_API_KEY",    label: "OpenAI API Key",     url: "platform.openai.com"   },
+  { key: "NOTION_TOKEN",      label: "Notion Token",       url: "notion.so/my-integrations" },
+];
+
 settingsBtn.addEventListener("click", openSettings);
 settingsModalClose.addEventListener("click", () => { settingsModalOverlay.hidden = true; });
 settingsModalOverlay.addEventListener("click", (e) => {
@@ -578,62 +583,140 @@ settingsModalOverlay.addEventListener("click", (e) => {
 });
 
 async function openSettings() {
-  hide(settingsRestart);
-  $("settings-anthropic").value = "";
-  $("settings-openai").value = "";
-  $("settings-notion").value = "";
   settingsModalOverlay.hidden = false;
+  settingsModalBody.innerHTML = '<p class="empty-state">Loading…</p>';
 
+  let s = {};
   try {
     const res = await fetch("/api/settings");
-    const s = await res.json();
+    s = await res.json();
+  } catch (_) {}
 
-    const fields = [
-      ["anthropic", "ANTHROPIC_API_KEY"],
-      ["openai",    "OPENAI_API_KEY"],
-      ["notion",    "NOTION_TOKEN"],
-    ];
-    fields.forEach(([id, key]) => {
-      const hint = $(`hint-${id}`);
-      const info = s[key] || {};
-      if (info.set && info.hint) {
-        hint.textContent = `Currently set: ${info.hint}  — leave blank to keep`;
-      } else if (info.set) {
-        hint.textContent = "Currently set — leave blank to keep";
-      } else {
-        hint.textContent = "Not set";
+  renderSettingsBody(s);
+}
+
+function renderSettingsBody(s) {
+  settingsModalBody.innerHTML = "";
+
+  // API key rows
+  SETTINGS_KEYS.forEach(({ key, label }) => {
+    const info = s[key] || { set: false, hint: "" };
+    const row = document.createElement("div");
+    row.className = "settings-key-row";
+    row.dataset.key = key;
+
+    row.innerHTML = `
+      <div class="settings-key-header">
+        <div class="settings-key-info">
+          <span class="settings-key-label">${esc(label)}</span>
+          <span class="settings-key-status ${info.set ? "status-set" : "status-unset"}">
+            ${info.set ? (info.hint ? esc(info.hint) : "Set") : "Not set"}
+          </span>
+        </div>
+        <button class="btn btn-secondary btn-sm settings-set-btn">${info.set ? "Update" : "Set"}</button>
+      </div>
+      <div class="settings-inline-editor" hidden>
+        <div class="settings-editor-row">
+          <input type="password" class="settings-key-input" placeholder="Paste new key…" autocomplete="off" spellcheck="false" />
+          <button class="btn btn-primary btn-sm settings-apply-btn">Save</button>
+          <button class="clear-btn settings-cancel-btn">cancel</button>
+        </div>
+        <p class="settings-save-msg" hidden></p>
+      </div>
+    `;
+
+    const setBtn    = row.querySelector(".settings-set-btn");
+    const editor    = row.querySelector(".settings-inline-editor");
+    const input     = row.querySelector(".settings-key-input");
+    const applyBtn  = row.querySelector(".settings-apply-btn");
+    const cancelBtn = row.querySelector(".settings-cancel-btn");
+    const msg       = row.querySelector(".settings-save-msg");
+
+    setBtn.addEventListener("click", () => {
+      editor.hidden = !editor.hidden;
+      if (!editor.hidden) { input.value = ""; input.focus(); }
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      editor.hidden = true;
+      input.value = "";
+    });
+
+    applyBtn.addEventListener("click", async () => {
+      const val = input.value.trim();
+      if (!val) { input.focus(); return; }
+      applyBtn.disabled = true;
+      try {
+        const res = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [key]: val }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          input.value = "";
+          editor.hidden = true;
+          msg.hidden = false;
+          msg.textContent = "Saved — restart server to apply.";
+          msg.className = "settings-save-msg settings-save-ok";
+          show(msg);
+          // refresh just this row's status
+          const fresh = await fetch("/api/settings").then((r) => r.json());
+          const fi = fresh[key] || {};
+          row.querySelector(".settings-key-status").textContent =
+            fi.set ? (fi.hint || "Set") : "Not set";
+          row.querySelector(".settings-key-status").className =
+            `settings-key-status ${fi.set ? "status-set" : "status-unset"}`;
+          setBtn.textContent = fi.set ? "Update" : "Set";
+        }
+      } finally {
+        applyBtn.disabled = false;
       }
     });
 
-    $("settings-llm").checked = !!s["LLM_CATEGORIZATION"];
-  } catch (_) {}
-}
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyBtn.click();
+      if (e.key === "Escape") cancelBtn.click();
+    });
 
-settingsSaveBtn.addEventListener("click", async () => {
-  const payload = {
-    ANTHROPIC_API_KEY: $("settings-anthropic").value,
-    OPENAI_API_KEY:    $("settings-openai").value,
-    NOTION_TOKEN:      $("settings-notion").value,
-    LLM_CATEGORIZATION: $("settings-llm").checked,
-  };
+    settingsModalBody.appendChild(row);
+  });
 
-  settingsSaveBtn.disabled = true;
-  try {
-    const res = await fetch("/api/settings", {
+  // Divider
+  const divider = document.createElement("div");
+  divider.className = "settings-divider";
+  settingsModalBody.appendChild(divider);
+
+  // LLM toggle row
+  const llmRow = document.createElement("div");
+  llmRow.className = "settings-llm-row";
+  const llmChecked = !!s["LLM_CATEGORIZATION"];
+  llmRow.innerHTML = `
+    <div class="settings-key-info">
+      <span class="settings-key-label">LLM Categorization</span>
+      <span class="settings-hint">Uses AI to assign categories. Disable for rule-based only.</span>
+    </div>
+    <label class="settings-toggle-label">
+      <input type="checkbox" id="settings-llm-check" ${llmChecked ? "checked" : ""} />
+      <span class="settings-key-status ${llmChecked ? "status-set" : "status-unset"}">${llmChecked ? "Enabled" : "Disabled"}</span>
+    </label>
+  `;
+
+  const llmCheck = llmRow.querySelector("#settings-llm-check");
+  const llmStatus = llmRow.querySelector(".settings-key-status");
+  llmCheck.addEventListener("change", async () => {
+    await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ LLM_CATEGORIZATION: llmCheck.checked }),
     });
-    const data = await res.json();
-    if (data.ok) {
-      if (data.restart_required) show(settingsRestart);
-      // Refresh hints
-      openSettings();
-    }
-  } finally {
-    settingsSaveBtn.disabled = false;
-  }
-});
+    const on = llmCheck.checked;
+    llmStatus.textContent = on ? "Enabled" : "Disabled";
+    llmStatus.className = `settings-key-status ${on ? "status-set" : "status-unset"}`;
+  });
+
+  settingsModalBody.appendChild(llmRow);
+}
 
 function saveLastUsed() {
   if (notionUrl.value) localStorage.setItem("lastDbUrl", notionUrl.value);
